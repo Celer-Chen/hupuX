@@ -374,9 +374,7 @@ class PostDetailViewModel constructor(
             _state.value = s.copy(replyError = "请输入回复内容")
             return
         }
-        val sig = cookiePrefs.replySignature.trim()
-        val textWithSig = if (text.isNotEmpty()) (if (sig.isNotEmpty()) "$text\n$sig" else text) else ""
-        val textHtml = if (textWithSig.isNotEmpty()) "<p>$textWithSig</p>" else ""
+        val textHtml = if (text.isNotEmpty()) "<p>$text</p>" else ""
         val imgHtml  = doneImages.joinToString("") { """<img src="${it.fileSrc}" />""" }
         _state.value = s.copy(isSubmittingReply = true, replyError = null)
         viewModelScope.launch {

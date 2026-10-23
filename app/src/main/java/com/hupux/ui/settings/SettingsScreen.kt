@@ -1,13 +1,7 @@
 package com.hupux.ui.settings
 
-import android.Manifest
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
-import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -21,22 +15,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
 import org.koin.androidx.compose.koinViewModel
-import coil3.compose.AsyncImage
 import com.hupux.BuildConfig
-import com.hupux.R
 import com.hupux.ui.theme.*
 
-private const val GITHUB_URL = "https://github.com/bidabrain/hupuX"
+private const val GITHUB_URL = "https://github.com/Celer-Chen/hupuX"
 
 @Composable
 fun SettingsScreen(
@@ -45,37 +33,8 @@ fun SettingsScreen(
 ) {
     val input          by vm.input.collectAsState()
     val saved          by vm.saved.collectAsState()
-    val signature      by vm.signature.collectAsState()
-    val signatureSaved by vm.signatureSaved.collectAsState()
     val updateState    by vm.updateState.collectAsState()
     val context = LocalContext.current
-
-    // 权限 launcher（仅 API 26-28 需要）
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) {
-            val ok = vm.saveQrCode()
-            Toast.makeText(context, if (ok) "收款码已保存到相册" else "保存失败", Toast.LENGTH_SHORT).show()
-        } else {
-            Toast.makeText(context, "需要存储权限才能保存图片", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    fun onSaveQr() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val ok = vm.saveQrCode()
-            Toast.makeText(context, if (ok) "收款码已保存到相册" else "保存失败", Toast.LENGTH_SHORT).show()
-        } else {
-            val perm = Manifest.permission.WRITE_EXTERNAL_STORAGE
-            if (ContextCompat.checkSelfPermission(context, perm) == PackageManager.PERMISSION_GRANTED) {
-                val ok = vm.saveQrCode()
-                Toast.makeText(context, if (ok) "收款码已保存到相册" else "保存失败", Toast.LENGTH_SHORT).show()
-            } else {
-                permissionLauncher.launch(perm)
-            }
-        }
-    }
 
     HazeTopBarScaffold(
         modifier = Modifier.background(AppBg),
@@ -176,44 +135,6 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(24.dp))
 
-            // ── 回复签名 ────────────────────────────────────────────
-            Surface(
-                Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp), color = CardBg, shadowElevation = 4.dp
-            ) {
-                Column(Modifier.padding(16.dp)) {
-                    Text("回复签名", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "保存后，每条回复末尾会自动追加签名内容",
-                        fontSize = 12.sp, color = TextTertiary
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = signature,
-                        onValueChange = vm::updateSignature,
-                        modifier = Modifier.fillMaxWidth().height(100.dp),
-                        placeholder = { Text("输入签名内容，留空则不追加签名...", fontSize = 12.sp, color = TextTertiary) },
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor   = HupuRed,
-                            unfocusedBorderColor = Color.Gray.copy(0.3f)
-                        )
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Button(
-                        onClick    = vm::saveSignature,
-                        modifier   = Modifier.fillMaxWidth(),
-                        shape      = RoundedCornerShape(12.dp),
-                        colors     = ButtonDefaults.buttonColors(containerColor = HupuRed)
-                    ) {
-                        Text(if (signatureSaved) "已保存 ✓" else "保存签名", fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(24.dp))
-
             // ── 外观 ────────────────────────────────────────────────
             Surface(
                 Modifier.fillMaxWidth(),
@@ -267,47 +188,6 @@ fun SettingsScreen(
             }
 
             Spacer(Modifier.height(24.dp))
-
-            // ── 支持开发者 ──────────────────────────────────────────
-            Surface(
-                Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp), color = CardBg, shadowElevation = 4.dp
-            ) {
-                Column(
-                    Modifier.padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        "支持开发者",
-                        fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "如果这个 app 对你有帮助，欢迎扫码请我喝杯咖啡 ☕",
-                        fontSize = 12.sp, color = TextTertiary, lineHeight = 18.sp
-                    )
-                    Spacer(Modifier.height(14.dp))
-                    AsyncImage(
-                        model             = R.drawable.payme,
-                        contentDescription = "收款码",
-                        contentScale      = ContentScale.Fit,
-                        modifier          = Modifier
-                            .size(220.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                    )
-                    Spacer(Modifier.height(14.dp))
-                    Button(
-                        onClick  = { onSaveQr() },
-                        shape    = RoundedCornerShape(12.dp),
-                        colors   = ButtonDefaults.buttonColors(containerColor = HupuRed),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("保存收款码到相册", fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(16.dp))
 
             // ── 关于 ────────────────────────────────────────────────
             Surface(
@@ -365,7 +245,7 @@ fun SettingsScreen(
                         Column(Modifier.weight(1f)) {
                             Text("开源地址", fontSize = 14.sp, color = TextSecondary)
                             Text(
-                                "github.com/bidabrain/hupuX",
+                                "github.com/Celer-Chen/hupuX",
                                 fontSize = 12.sp, color = HupuRed
                             )
                         }

@@ -55,7 +55,6 @@
 - **评论排序**：正序 / 倒序 / 最热（按点亮数）
 - 点击「X 条回复」展开子回复面板，支持**无限递归嵌套展开**
 - **收藏 / 推荐 / 回复 / 点赞（需要登录）**：登录后自动切换桌面版 API 解锁；回复支持插图
-- **回复签名**：设置中可自定义回复末尾自动追加的签名
 - 图片点击全屏查看（双指缩放 / GIF），长按保存至相册
 
 ### 我的（需要登录）
@@ -138,7 +137,7 @@ hupuX/
 ## 构建与运行
 
 ```bash
-git clone https://github.com/bidabrain/hupuX.git
+git clone https://github.com/Celer-Chen/hupuX.git
 cd hupuX
 
 # 构建 Debug 包（APK 位于 app/build/outputs/apk/debug/）

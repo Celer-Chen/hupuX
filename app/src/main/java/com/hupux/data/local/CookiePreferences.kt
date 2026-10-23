@@ -28,12 +28,6 @@ class CookiePreferences constructor(ctx: Context) : CookieStorage {
             _changeFlow.tryEmit(Unit)
         }
 
-    override var replySignature: String
-        get() = prefs.getString(KEY_SIGNATURE, DEFAULT_SIGNATURE) ?: DEFAULT_SIGNATURE
-        set(value) {
-            prefs.edit().putString(KEY_SIGNATURE, value).apply()
-        }
-
     override val effectiveCookie: String
         get() = manualCookie.ifEmpty { webviewCookie }
 
@@ -59,7 +53,5 @@ class CookiePreferences constructor(ctx: Context) : CookieStorage {
     companion object {
         private const val KEY_MANUAL    = "manual_cookie"
         private const val KEY_WEBVIEW   = "webview_cookie"
-        private const val KEY_SIGNATURE = "reply_signature"
-        private const val DEFAULT_SIGNATURE = "------\n发自我的超级无敌hupuX客户端"
     }
 }

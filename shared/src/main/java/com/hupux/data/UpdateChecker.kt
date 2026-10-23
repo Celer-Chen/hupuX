@@ -13,12 +13,12 @@ import io.ktor.client.statement.bodyAsText
  * 用户就会看到「API rate limit exceeded for <IP>」。
  * release 的 atom feed 是静态文件，不受该限制。
  */
-private const val RELEASES_ATOM = "https://github.com/bidabrain/hupuX/releases.atom"
+private const val RELEASES_ATOM = "https://github.com/Celer-Chen/hupuX/releases.atom"
 
 /** atom 里每个 entry 的链接形如 .../releases/tag/v1.8.7，第一个即最新 */
 private val TAG_REGEX = Regex("""releases/tag/([^"<\s]+)""")
 
-const val GITHUB_RELEASES_URL = "https://github.com/bidabrain/hupuX/releases/latest"
+const val GITHUB_RELEASES_URL = "https://github.com/Celer-Chen/hupuX/releases/latest"
 
 /**
  * 检查更新的结果。刻意用扁平的 data class 而不是 sealed class，
@@ -55,7 +55,7 @@ class UpdateChecker(private val client: HttpClient) {
         return UpdateCheckResult(
             latest     = latest,
             hasUpdate  = compareVersions(latest, normalize(currentVersion)) > 0,
-            releaseUrl = "https://github.com/bidabrain/hupuX/releases/tag/$tag",
+            releaseUrl = "https://github.com/Celer-Chen/hupuX/releases/tag/$tag",
             error      = null
         )
     }

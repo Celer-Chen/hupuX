@@ -102,7 +102,7 @@ val appModule = module {
     viewModel { (handle: SavedStateHandle) -> UserRecommendListViewModel(get(), handle) }
     viewModel { (handle: SavedStateHandle) -> UserReplyListViewModel(get(), handle) }
     viewModel { (handle: SavedStateHandle) -> UserThreadListViewModel(get(), handle) }
-    viewModel { SettingsViewModel(get<CookiePreferences>(), androidContext(), get()) }
+    viewModel { SettingsViewModel(get<CookiePreferences>(), get()) }
     viewModel { ScoreViewModel(get()) }
     viewModel { ScoreDetailViewModel(get()) }
     viewModel { ScoreItemViewModel(get(), get<CookiePreferences>()) }
