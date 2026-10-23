@@ -123,7 +123,7 @@ private fun MessageTabContent(
         derivedStateOf {
             val info = listState.layoutInfo
             val last = info.visibleItemsInfo.lastOrNull()?.index ?: 0
-            last >= info.totalItemsCount - 3 && tab.hasMore && !tab.isLoading
+            last >= info.totalItemsCount - 3 && tab.hasMore && !tab.isLoading && !tab.isRefreshing
         }
     }
     LaunchedEffect(shouldLoadMore) { if (shouldLoadMore) onLoadMore() }

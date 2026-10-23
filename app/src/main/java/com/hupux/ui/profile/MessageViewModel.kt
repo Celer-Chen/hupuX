@@ -41,7 +41,7 @@ class MessageViewModel constructor(
     fun loadMore() {
         val tabKey = _state.value.selectedTab
         val tab = _state.value.tabs[tabKey] ?: return
-        if (tab.isLoading || !tab.hasMore) return
+        if (tab.isLoading || tab.isRefreshing || !tab.hasMore) return
         loadTab(tabKey, tab.nextPageStr)
     }
 

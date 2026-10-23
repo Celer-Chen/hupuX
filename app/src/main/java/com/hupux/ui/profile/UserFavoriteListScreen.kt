@@ -47,7 +47,7 @@ fun UserFavoriteListScreen(
         derivedStateOf {
             val info = listState.layoutInfo
             val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: 0
-            lastVisible >= info.totalItemsCount - 3 && state.hasMore && !state.isLoading
+            lastVisible >= info.totalItemsCount - 3 && state.hasMore && !state.isLoading && !state.isRefreshing
         }
     }
     LaunchedEffect(shouldLoadMore) { if (shouldLoadMore) vm.load() }

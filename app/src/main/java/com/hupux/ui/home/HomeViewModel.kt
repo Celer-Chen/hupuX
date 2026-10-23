@@ -200,7 +200,7 @@ class HomeViewModel constructor(
 
     fun loadMoreFollowed() {
         val s = _state.value
-        if (s.isLoadingMoreFollow) return
+        if (s.isLoadingMoreFollow || s.isRefreshing) return
 
         if (s.followDisplayCount < s.followedPool.size) {
             _state.value = s.copy(followDisplayCount = s.followDisplayCount + 10)
