@@ -272,15 +272,20 @@ class HupuScraper(private val client: HttpClient) {
         .replace(">", "&gt;")
         .replace("\"", "&quot;")
 
-    /** 移动端评论列表翻页，返回 (评论列表, 是否还有更多) */
-    suspend fun fetchReplyList(tid: String, page: Int): Pair<List<Comment>, Boolean> {
+    /** 移动端评论列表翻页（20 条/页） */
+    suspend fun fetchReplyList(tid: String, page: Int): CommentPage {
         val url = "$BASE_URL/api/v2/reply/list/$tid?page=$page"
         val data = parseJsonObject(fetch(url)).obj("data")
-            ?: return Pair(emptyList(), false)
-        val list = data.arr("list") ?: return Pair(emptyList(), false)
+            ?: return CommentPage(emptyList(), page, 0, false)
+        val list = data.arr("list") ?: return CommentPage(emptyList(), page, 0, false)
         val current = data.int_("current") ?: page
         val total   = data.int_("total") ?: 1
-        return Pair(list.mapNotNull { parseComment(it.obj) }, current < total)
+        return CommentPage(
+            comments    = list.mapNotNull { parseComment(it.obj) },
+            currentPage = current,
+            totalPages  = total,
+            hasMore     = current < total
+        )
     }
 
     /** 获取指定评论的子回复列表 */

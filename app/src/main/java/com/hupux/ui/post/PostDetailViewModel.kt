@@ -24,6 +24,9 @@ sealed class PostDetailUiState {
         val replyStack: List<String> = emptyList(),
         val isLoadingSubReplies: Boolean = false,
         val commentPage: Int = 1,
+        /** 分页浏览模式：每次只显示当前页评论；关闭后恢复滚动连续加载 */
+        val pageMode: Boolean = false,
+        val isPageLoading: Boolean = false,
         val isLoadingMoreComments: Boolean = false,
         val replyingTo: Comment? = null,
         val showReplySheet: Boolean = false,
@@ -34,6 +37,7 @@ sealed class PostDetailUiState {
         val replySuccess: Boolean = false,
         val likedPids: Set<String> = emptySet(),    // 本次会话内点亮的 pid 集合
         val likingPids: Set<String> = emptySet(),   // 正在请求中的 pid，防止重复点击
+        val isLoggedIn: Boolean = false,
         val isRecommended: Boolean = false,
         val isRecommending: Boolean = false,
         val isCollected: Boolean = false,
@@ -52,6 +56,11 @@ sealed class PostDetailUiState {
         val hasMoreDisplayed: Boolean get() =
             if (sortMode == CommentSort.DEFAULT) post.hasMoreComments
             else sortedDisplayCount < sortedComments.size
+        val totalCommentPages: Int get() = post.commentTotalPages
+        val canGoPrevPage: Boolean get() = commentPage > 1
+        val canGoNextPage: Boolean get() =
+            if (post.commentTotalPages > 0) commentPage < post.commentTotalPages
+            else post.hasMoreComments
     }
     data class Error(val message: String) : PostDetailUiState()
 }
@@ -65,9 +74,11 @@ class PostDetailViewModel constructor(
     val state = _state.asStateFlow()
     private var currentTid = ""
     private val replyUploadJobs = mutableMapOf<Uri, Job>()
+    private var pageJob: Job? = null
 
     fun load(tid: String) {
         if (currentTid == tid && _state.value is PostDetailUiState.Success) return
+        pageJob?.cancel()
         currentTid = tid
         viewModelScope.launch {
             _state.value = PostDetailUiState.Loading
@@ -78,7 +89,10 @@ class PostDetailViewModel constructor(
                     _state.value = PostDetailUiState.Success(
                         post          = post,
                         subRepliesMap = initialMap,
-                        isRecommended = post.isRecommended
+                        isRecommended = post.isRecommended,
+                        isLoggedIn    = cookiePrefs.isLoggedIn,
+                        // 多页帖子默认进入分页模式：盖楼贴不再无限叠加，方便按页/跳页浏览
+                        pageMode      = post.commentTotalPages > 1 || post.hasMoreComments
                     )
                 }
                 .onFailure { _state.value = PostDetailUiState.Error(it.message ?: "加载失败") }
@@ -111,20 +125,25 @@ class PostDetailViewModel constructor(
         }
     }
 
+    /** 连续阅读模式：滚到底自动加载下一页（分页模式下禁用） */
     fun loadMoreComments() {
         val s = _state.value as? PostDetailUiState.Success ?: return
-        if (s.isLoadingMoreComments || !s.post.hasMoreComments) return
+        if (s.pageMode || s.isLoadingMoreComments || !s.post.hasMoreComments) return
         _state.value = s.copy(isLoadingMoreComments = true)
         val nextPage = s.commentPage + 1
         viewModelScope.launch {
-            runCatching { postRepo.loadMoreComments(currentTid, nextPage) }
-                .onSuccess { result ->
+            runCatching { postRepo.loadCommentsPage(currentTid, nextPage) }
+                .onSuccess { page ->
                     val s2 = _state.value as? PostDetailUiState.Success ?: return@onSuccess
                     val seen = s2.post.comments.map { it.pid }.toHashSet()
-                    val fresh = result.first.filter { it.pid !in seen }
+                    val fresh = page.comments.filter { it.pid !in seen }
                     _state.value = s2.copy(
-                        post = s2.post.copy(comments = s2.post.comments + fresh, hasMoreComments = result.second),
-                        commentPage = nextPage,
+                        post = s2.post.copy(
+                            comments          = s2.post.comments + fresh,
+                            hasMoreComments   = page.hasMore,
+                            commentTotalPages = page.totalPages
+                        ),
+                        commentPage = page.currentPage,
                         isLoadingMoreComments = false
                     )
                 }
@@ -133,6 +152,79 @@ class PostDetailViewModel constructor(
                         _state.value = it.copy(isLoadingMoreComments = false)
                     }
                 }
+        }
+    }
+
+    /** 跳到指定评论页（分页模式） */
+    fun goToCommentPage(page: Int) {
+        val s = _state.value as? PostDetailUiState.Success ?: return
+        if (page < 1 || s.isPageLoading) return
+        val total = s.post.commentTotalPages
+        if (total > 0 && page > total) return
+        if (s.pageMode && page == s.commentPage) return
+
+        pageJob?.cancel()
+        _state.value = s.copy(
+            pageMode      = true,
+            isPageLoading = true,
+            replyStack    = emptyList()
+        )
+        pageJob = viewModelScope.launch {
+            runCatching { postRepo.loadCommentsPage(currentTid, page) }
+                .onSuccess { data ->
+                    val s2 = _state.value as? PostDetailUiState.Success ?: return@onSuccess
+                    _state.value = s2.copy(
+                        post = s2.post.copy(
+                            comments          = data.comments,
+                            hasMoreComments   = data.hasMore,
+                            commentTotalPages = data.totalPages
+                        ),
+                        commentPage       = data.currentPage,
+                        pageMode          = true,
+                        isPageLoading     = false,
+                        sortMode          = CommentSort.DEFAULT,
+                        sortedComments    = emptyList(),
+                        sortedDisplayCount = 0,
+                        fullComments      = emptyList()
+                    )
+                }
+                .onFailure {
+                    (_state.value as? PostDetailUiState.Success)?.let {
+                        _state.value = it.copy(isPageLoading = false)
+                    }
+                }
+        }
+    }
+
+    fun nextCommentPage() {
+        val s = _state.value as? PostDetailUiState.Success ?: return
+        if (s.canGoNextPage) goToCommentPage(s.commentPage + 1)
+    }
+
+    fun prevCommentPage() {
+        val s = _state.value as? PostDetailUiState.Success ?: return
+        if (s.canGoPrevPage) goToCommentPage(s.commentPage - 1)
+    }
+
+    /** 从分页模式切回连续阅读；保留当前页评论，继续向下翻时自动追加 */
+    fun enableContinuousMode() {
+        pageJob?.cancel()
+        val s = _state.value as? PostDetailUiState.Success ?: return
+        _state.value = s.copy(
+            pageMode           = false,
+            isPageLoading      = false,
+            sortMode           = CommentSort.DEFAULT,
+            sortedComments     = emptyList(),
+            sortedDisplayCount = 0,
+            fullComments       = emptyList()
+        )
+    }
+
+    /** 从连续模式切回分页浏览，先按当前页码重新加载一页 */
+    fun enablePageMode() {
+        val s = _state.value as? PostDetailUiState.Success ?: return
+        if (s.post.commentTotalPages > 1 || s.post.hasMoreComments) {
+            goToCommentPage(s.commentPage)
         }
     }
 
@@ -147,11 +239,12 @@ class PostDetailViewModel constructor(
             return
         }
 
-        // 已有全量缓存（登录后拉过），或未登录用手头的 —— 直接本地重排，不重复联网
+        // 分页模式只对当前页做本地排序；连续模式才尝试拉全量
         val cached = when {
-            s.fullComments.isNotEmpty() -> s.fullComments
-            !cookiePrefs.isLoggedIn     -> s.post.comments
-            else                        -> null
+            s.pageMode                   -> s.post.comments
+            s.fullComments.isNotEmpty()  -> s.fullComments
+            !cookiePrefs.isLoggedIn      -> s.post.comments
+            else                         -> null
         }
         if (cached != null) {
             val sorted = applySort(cached, mode)
@@ -168,11 +261,11 @@ class PostDetailViewModel constructor(
         viewModelScope.launch {
             val all = s.post.comments.toMutableList()
             var page = s.commentPage + 1
-            while (page <= s.post.desktopTotalPages) {
-                runCatching { postRepo.loadMoreComments(currentTid, page) }
-                    .onSuccess { (comments, _) ->
+            while (page <= s.post.commentTotalPages) {
+                runCatching { postRepo.loadCommentsPage(currentTid, page) }
+                    .onSuccess { data ->
                         val seen = all.map { it.pid }.toHashSet()
-                        all.addAll(comments.filter { it.pid !in seen })
+                        all.addAll(data.comments.filter { it.pid !in seen })
                     }
                 page++
             }

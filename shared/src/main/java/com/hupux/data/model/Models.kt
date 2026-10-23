@@ -63,10 +63,18 @@ data class PostDetail(
     val hasMoreComments: Boolean,
     val initialNextPid: String? = null,
     val desktopBaseUrl: String = "",     // 桌面版分页 base，如 /tid_euid.html
-    val desktopTotalPages: Int = 0,
+    val commentTotalPages: Int = 0,      // 评论总页数；0=未知
     val fid: String = "",               // 版块 ID（桌面版回复需要）
     val topicId: String = "",           // 专区 ID（桌面版回复需要）
     val isRecommended: Boolean = false  // 当前登录用户是否已推荐
+)
+
+/** 一页评论。currentPage / totalPages 均从 1 开始。 */
+data class CommentPage(
+    val comments: List<Comment>,
+    val currentPage: Int,
+    val totalPages: Int,
+    val hasMore: Boolean
 )
 
 data class HotItem(

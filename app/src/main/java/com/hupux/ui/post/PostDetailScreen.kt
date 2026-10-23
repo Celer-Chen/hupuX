@@ -66,6 +66,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -85,6 +87,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -195,11 +198,11 @@ fun PostDetailScreen(
                 isLoading        = success.isLoadingSubReplies,
                 canGoBack        = success.replyStack.size > 1,
                 likedPids        = success.likedPids,
-                onLike           = if (success.post.fid.isNotEmpty()) vm::toggleLike else null,
+                onLike           = if (success.isLoggedIn && success.post.fid.isNotEmpty()) vm::toggleLike else null,
                 onBack           = vm::popReplies,
                 onReplyClick     = vm::showReplies,
-                onReplyToComment = vm::startReply,
-                onOpenUser       = onOpenUser
+                onReplyToComment = if (success.isLoggedIn) vm::startReply else null,
+                onOpenUser       = if (success.isLoggedIn) onOpenUser else { _: String -> }
             )
         }
     }
@@ -245,17 +248,35 @@ private fun PostContent(
     /** 顶栏浮在内容之上，顶部留白按量到的栏高补 */
     contentTopPadding: Dp = 0.dp
 ) {
+    val listState = rememberLazyListState()
+    var scrollToComments by remember { mutableStateOf(false) }
+    var showJumpDialog by remember { mutableStateOf(false) }
+    var jumpText by remember { mutableStateOf("") }
+
+    fun goToPage(page: Int) {
+        scrollToComments = true
+        vm.goToCommentPage(page)
+    }
+
+    LaunchedEffect(s.pageMode, s.commentPage) {
+        if (scrollToComments) {
+            listState.animateScrollToItem(1)
+            scrollToComments = false
+        }
+    }
+
     LazyColumn(
-        Modifier.fillMaxSize(),
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(top = contentTopPadding + 8.dp, bottom = 24.dp)
     ) {
         item { PostBodyCard(
             post          = s.post,
             isRecommended = s.isRecommended,
             isCollected   = s.isCollected,
-            onCollect     = if (s.post.fid.isNotEmpty()) vm::toggleCollect else null,
-            onRecommend   = if (s.post.fid.isNotEmpty()) vm::recommendPost else null,
-            onReplyMain   = if (s.post.fid.isNotEmpty()) vm::startMainPostReply else null
+            onCollect     = if (s.isLoggedIn && s.post.fid.isNotEmpty()) vm::toggleCollect else null,
+            onRecommend   = if (s.isLoggedIn && s.post.fid.isNotEmpty()) vm::recommendPost else null,
+            onReplyMain   = if (s.isLoggedIn && s.post.fid.isNotEmpty()) vm::startMainPostReply else null
         ) }
         item {
             Spacer(Modifier.height(8.dp))
@@ -281,22 +302,42 @@ private fun PostContent(
                 }
             }
         }
+        if (s.post.commentTotalPages > 1 || s.pageMode) {
+            item {
+                CommentPager(
+                    page         = s.commentPage,
+                    totalPages   = s.post.commentTotalPages,
+                    pageMode     = s.pageMode,
+                    canPrev      = s.canGoPrevPage,
+                    canNext      = s.canGoNextPage,
+                    isLoading    = s.isPageLoading,
+                    onPrev       = { scrollToComments = true; vm.prevCommentPage() },
+                    onNext       = { scrollToComments = true; vm.nextCommentPage() },
+                    onJump       = { jumpText = ""; showJumpDialog = true },
+                    onPageMode   = { scrollToComments = true; vm.enablePageMode() },
+                    onContinuous = vm::enableContinuousMode
+                )
+            }
+        }
         val displayedComments = s.displayedComments
         itemsIndexed(displayedComments, key = { _, c -> c.pid }) { index, comment ->
-            // 正序模式：靠近底部时自动加载下一页
-            if (s.sortMode == CommentSort.DEFAULT && index == displayedComments.size - 3 && s.post.hasMoreComments)
+            // 连续模式：靠近底部时自动加载下一页；分页模式不自动叠加
+            if (!s.pageMode && s.sortMode == CommentSort.DEFAULT &&
+                index == displayedComments.size - 3 && s.post.hasMoreComments
+            ) {
                 LaunchedEffect(s.post.comments.size) { vm.loadMoreComments() }
+            }
             CommentCard(
                 comment          = comment,
                 isLiked          = comment.pid in s.likedPids,
-                onLike           = if (s.post.fid.isNotEmpty()) {{ vm.toggleLike(comment) }} else null,
+                onLike           = if (s.isLoggedIn && s.post.fid.isNotEmpty()) {{ vm.toggleLike(comment) }} else null,
                 onReplyClick     = { vm.showReplies(comment.pid) },
-                onReplyToComment = if (comment.desktopPage > 0) {
+                onReplyToComment = if (s.isLoggedIn && comment.desktopPage > 0) {
                     { vm.startReply(comment) }
                 } else null,
-                onUserClick      = if (comment.authorPuid.isNotEmpty() && comment.desktopPage > 0) {
+                onUserClick      = if (s.isLoggedIn && comment.authorPuid.isNotEmpty() && comment.desktopPage > 0) {
                     { onOpenUser(comment.authorPuid) }
-                } else null   // 仅登录后的桌面版数据可点：主页列表接口需登录
+                } else null   // 仅登录后开放用户主页与回复
             )
         }
         // 非默认排序：数据已全部在内存，「加载更多」只是本地增量显示，无需网络
@@ -317,6 +358,136 @@ private fun PostContent(
                 Box(Modifier.fillMaxWidth().padding(16.dp), Alignment.Center) {
                     CircularProgressIndicator(Modifier.size(24.dp), color = HupuRed)
                 }
+            }
+        }
+        if (s.pageMode) {
+            item {
+                CommentPager(
+                    page         = s.commentPage,
+                    totalPages   = s.post.commentTotalPages,
+                    pageMode     = true,
+                    canPrev      = s.canGoPrevPage,
+                    canNext      = s.canGoNextPage,
+                    isLoading    = s.isPageLoading,
+                    onPrev       = { scrollToComments = true; vm.prevCommentPage() },
+                    onNext       = { scrollToComments = true; vm.nextCommentPage() },
+                    onJump       = { jumpText = ""; showJumpDialog = true },
+                    onPageMode   = { scrollToComments = true; vm.enablePageMode() },
+                    onContinuous = vm::enableContinuousMode,
+                    showContinuous = false
+                )
+            }
+        }
+    }
+
+    if (showJumpDialog) {
+        val maxPage = s.post.commentTotalPages.takeIf { it > 0 } ?: Int.MAX_VALUE
+        AlertDialog(
+            onDismissRequest = { showJumpDialog = false },
+            title = { Text("跳到评论页") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value         = jumpText,
+                        onValueChange = { jumpText = it.filter(Char::isDigit).take(6) },
+                        singleLine    = true,
+                        label         = { Text("页码") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier      = Modifier.fillMaxWidth()
+                    )
+                    if (s.post.commentTotalPages > 0) {
+                        Spacer(Modifier.height(6.dp))
+                        Text("共 ${s.post.commentTotalPages} 页", fontSize = 12.sp, color = TextTertiary)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val target = jumpText.toIntOrNull()
+                        if (target != null && target in 1..maxPage) {
+                            showJumpDialog = false
+                            goToPage(target)
+                        }
+                    }
+                ) { Text("确定", color = HupuRed) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showJumpDialog = false }) { Text("取消") }
+            }
+        )
+    }
+}
+
+@Composable
+private fun CommentPager(
+    page: Int,
+    totalPages: Int,
+    pageMode: Boolean,
+    canPrev: Boolean,
+    canNext: Boolean,
+    isLoading: Boolean,
+    onPrev: () -> Unit,
+    onNext: () -> Unit,
+    onJump: () -> Unit,
+    onPageMode: () -> Unit,
+    onContinuous: () -> Unit,
+    showContinuous: Boolean = true,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 2.dp),
+        color    = CardBg
+    ) {
+        if (!pageMode) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    if (totalPages > 0) "共 $totalPages 页" else "分页浏览",
+                    fontSize = 12.sp, color = TextTertiary,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(
+                    onClick = onPageMode,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                ) { Text("分页浏览", fontSize = 12.sp, color = HupuRed) }
+            }
+            return@Surface
+        }
+
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextButton(
+                onClick = onPrev,
+                enabled = canPrev && !isLoading,
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+            ) { Text("上一页", fontSize = 12.sp) }
+            Text(
+                if (totalPages > 0) "第 $page / $totalPages 页" else "第 $page 页",
+                fontSize = 12.sp, color = TextSecondary,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(
+                onClick = onNext,
+                enabled = canNext && !isLoading,
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+            ) { Text("下一页", fontSize = 12.sp) }
+            TextButton(
+                onClick = onJump,
+                enabled = !isLoading,
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+            ) { Text("跳页", fontSize = 12.sp) }
+            if (showContinuous) {
+                TextButton(
+                    onClick = onContinuous,
+                    enabled = !isLoading,
+                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                ) { Text("连续", fontSize = 12.sp) }
             }
         }
     }

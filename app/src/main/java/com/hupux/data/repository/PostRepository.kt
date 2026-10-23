@@ -2,7 +2,7 @@ package com.hupux.data.repository
 
 import android.net.Uri
 import com.hupux.data.local.CookiePreferences
-import com.hupux.data.model.Comment
+import com.hupux.data.model.CommentPage
 import com.hupux.data.model.PostDetail
 import com.hupux.data.scraper.HupuDesktopScraper
 import com.hupux.data.scraper.HupuImageUploader
@@ -19,30 +19,38 @@ class PostRepository constructor(
 ) {
     suspend fun getPost(tid: String): PostDetail = withContext(Dispatchers.IO) {
         val post = scraper.fetchPost(tid)
-        if (cookiePrefs.isLoggedIn) {
-            try {
-                val desktop = desktopScraper.fetchPostReplies(tid)
-                post.copy(
-                    comments          = desktop.comments,
-                    hasMoreComments   = desktop.currentPage < desktop.totalPages,
-                    desktopTotalPages = desktop.totalPages,
-                    fid               = desktop.fid,
-                    topicId           = desktop.topicId,
-                    isRecommended     = desktop.isRecommended
-                )
-            } catch (_: Exception) {
-                post
-            }
-        } else {
+        // 桌面版 SSR 分页信息最完整（current/total），且匿名也可访问。
+        // 匿名短贴继续用移动端 SSR（更快）；登录用户或明显是多页盖楼贴才抓桌面版。
+        val needsDesktop = cookiePrefs.isLoggedIn ||
+            post.hasMoreComments ||
+            post.replies > post.comments.size
+        if (!needsDesktop) return@withContext post
+        try {
+            val desktop = desktopScraper.fetchPostReplies(tid)
+            post.copy(
+                comments          = desktop.comments,
+                hasMoreComments   = desktop.currentPage < desktop.totalPages,
+                commentTotalPages = desktop.totalPages,
+                desktopBaseUrl    = desktop.baseUrl,
+                fid               = desktop.fid,
+                topicId           = desktop.topicId,
+                isRecommended     = desktop.isRecommended
+            )
+        } catch (_: Exception) {
             post
         }
     }
 
-    suspend fun loadMoreComments(tid: String, page: Int): Pair<List<Comment>, Boolean> =
+    suspend fun loadCommentsPage(tid: String, page: Int): CommentPage =
         withContext(Dispatchers.IO) {
-            if (cookiePrefs.isLoggedIn) {
-                val desktop = desktopScraper.fetchPostReplies(tid, page)
-                Pair(desktop.comments, desktop.currentPage < desktop.totalPages)
+            val desktop = runCatching { desktopScraper.fetchPostReplies(tid, page) }.getOrNull()
+            if (desktop != null) {
+                CommentPage(
+                    comments    = desktop.comments,
+                    currentPage = desktop.currentPage,
+                    totalPages  = desktop.totalPages,
+                    hasMore     = desktop.currentPage < desktop.totalPages
+                )
             } else {
                 scraper.fetchReplyList(tid, page)
             }
@@ -118,10 +126,8 @@ class PostRepository constructor(
         }
 
     suspend fun getSubReplies(tid: String, parentPid: String) = withContext(Dispatchers.IO) {
-        if (cookiePrefs.isLoggedIn) {
-            desktopScraper.fetchDesktopSubReplies(tid, parentPid)
-        } else {
-            scraper.fetchSubReplies(tid, parentPid)
-        }
+        val desktop = runCatching { desktopScraper.fetchDesktopSubReplies(tid, parentPid) }
+            .getOrDefault(emptyList())
+        if (desktop.isNotEmpty()) desktop else scraper.fetchSubReplies(tid, parentPid)
     }
 }
