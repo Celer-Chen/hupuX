@@ -32,7 +32,6 @@ import com.hupux.ui.profile.UserFavoriteListViewModel
 import com.hupux.ui.profile.UserRecommendListViewModel
 import com.hupux.ui.profile.UserReplyListViewModel
 import com.hupux.ui.profile.UserThreadListViewModel
-import com.hupux.ui.profile.UserWebViewViewModel
 import com.hupux.ui.topic.TopicDetailViewModel
 import com.hupux.ui.zone.ZoneDetailViewModel
 import com.hupux.ui.zone.ZoneListViewModel
@@ -103,7 +102,6 @@ val appModule = module {
     viewModel { (handle: SavedStateHandle) -> UserRecommendListViewModel(get(), handle) }
     viewModel { (handle: SavedStateHandle) -> UserReplyListViewModel(get(), handle) }
     viewModel { (handle: SavedStateHandle) -> UserThreadListViewModel(get(), handle) }
-    viewModel { UserWebViewViewModel(get<CookiePreferences>()) }
     viewModel { SettingsViewModel(get<CookiePreferences>(), androidContext(), get()) }
     viewModel { ScoreViewModel(get()) }
     viewModel { ScoreDetailViewModel(get()) }
