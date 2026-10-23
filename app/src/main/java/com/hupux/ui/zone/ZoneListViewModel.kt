@@ -11,7 +11,10 @@ import kotlinx.coroutines.launch
 
 sealed class ZoneListUiState {
     object Loading : ZoneListUiState()
-    data class Success(val categories: List<ZoneCategory>) : ZoneListUiState()
+    data class Success(
+        val categories: List<ZoneCategory>,
+        val isRefreshing: Boolean = false
+    ) : ZoneListUiState()
     data class Error(val message: String) : ZoneListUiState()
 }
 
@@ -33,12 +36,27 @@ class ZoneListViewModel constructor(
 
     init { load() }
 
-    fun load() {
+    fun load() = loadInternal(isRefresh = false)
+
+    fun refresh() = loadInternal(isRefresh = true)
+
+    private fun loadInternal(isRefresh: Boolean) {
         viewModelScope.launch {
-            _state.value = ZoneListUiState.Loading
+            val snapshot = _state.value
+            _state.value = if (isRefresh && snapshot is ZoneListUiState.Success) {
+                snapshot.copy(isRefreshing = true)
+            } else {
+                ZoneListUiState.Loading
+            }
             runCatching { repo.getZoneList() }
                 .onSuccess { _state.value = ZoneListUiState.Success(it) }
-                .onFailure { _state.value = ZoneListUiState.Error(it.message ?: "加载失败") }
+                .onFailure { e ->
+                    _state.value = if (isRefresh && snapshot is ZoneListUiState.Success) {
+                        snapshot.copy(isRefreshing = false)
+                    } else {
+                        ZoneListUiState.Error(e.message ?: "加载失败")
+                    }
+                }
         }
     }
 

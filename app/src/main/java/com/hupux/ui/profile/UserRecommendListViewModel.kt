@@ -21,6 +21,7 @@ class UserRecommendListViewModel constructor(
     data class State(
         val items: List<UserRecommendPost> = emptyList(),
         val isLoading: Boolean = false,
+        val isRefreshing: Boolean = false,
         val hasMore: Boolean = true,
         val error: String? = null
     )
@@ -33,30 +34,37 @@ class UserRecommendListViewModel constructor(
     init { loadInternal() }
 
     fun load() {
-        if (_state.value.isLoading) return
-        loadInternal()
+        if (_state.value.isLoading || _state.value.isRefreshing) return
+        loadInternal(isRefresh = false)
     }
 
-    private fun loadInternal() {
+    private fun loadInternal(isRefresh: Boolean = false) {
         viewModelScope.launch(Dispatchers.IO) {
-            _state.value = _state.value.copy(isLoading = true, error = null)
+            val hasItems = _state.value.items.isNotEmpty()
+            _state.value = _state.value.copy(
+                isLoading    = !isRefresh || !hasItems,
+                isRefreshing = isRefresh,
+                error        = null
+            )
             try {
                 val items = scraper.fetchRecommendList(uid, page)
                 page++
                 _state.value = _state.value.copy(
-                    items     = _state.value.items + items,
-                    hasMore   = items.size >= 30,
-                    isLoading = false
+                    items        = if (isRefresh) items else _state.value.items + items,
+                    hasMore      = items.size >= 30,
+                    isLoading    = false,
+                    isRefreshing = false
                 )
             } catch (e: Exception) {
-                _state.value = _state.value.copy(isLoading = false, error = e.message)
+                _state.value = _state.value.copy(
+                    isLoading = false, isRefreshing = false, error = e.message)
             }
         }
     }
 
     fun refresh() {
+        if (_state.value.isRefreshing) return
         page = 1
-        _state.value = State()
-        loadInternal()
+        loadInternal(isRefresh = true)
     }
 }

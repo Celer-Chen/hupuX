@@ -13,6 +13,7 @@ data class TopicDetailUiState(
     val info:          TopicInfo?  = null,
     val posts:         List<Post>  = emptyList(),
     val isLoading:     Boolean     = false,
+    val isRefreshing:  Boolean     = false,
     val isLoadingMore: Boolean     = false,
     val error:         String?     = null,
     val nextPage:      Int?        = null
@@ -33,21 +34,37 @@ class TopicDetailViewModel(
         load()
     }
 
-    fun load() {
+    fun load() = loadInternal(isRefresh = false)
+
+    fun refresh() = loadInternal(isRefresh = true)
+
+    private fun loadInternal(isRefresh: Boolean) {
         viewModelScope.launch {
-            _state.value = _state.value.copy(
-                isLoading = true, posts = emptyList(), nextPage = null, error = null)
+            val snapshot = _state.value
+            _state.value = if (isRefresh && snapshot.posts.isNotEmpty()) {
+                snapshot.copy(isRefreshing = true, error = null)
+            } else {
+                snapshot.copy(
+                    isLoading = true, posts = emptyList(),
+                    nextPage = null, error = null
+                )
+            }
             runCatching { repo.getTopicThreads(tagId, 1) }
                 .onSuccess { page ->
                     _state.value = _state.value.copy(
-                        info      = page.info,
-                        posts     = page.posts,
-                        nextPage  = page.nextPage,
-                        isLoading = false
+                        info         = page.info,
+                        posts        = page.posts,
+                        nextPage     = page.nextPage,
+                        isLoading    = false,
+                        isRefreshing = false
                     )
                 }
-                .onFailure {
-                    _state.value = _state.value.copy(isLoading = false, error = it.message ?: "加载失败")
+                .onFailure { e ->
+                    _state.value = _state.value.copy(
+                        isLoading    = false,
+                        isRefreshing = false,
+                        error        = e.message ?: "加载失败"
+                    )
                 }
         }
     }

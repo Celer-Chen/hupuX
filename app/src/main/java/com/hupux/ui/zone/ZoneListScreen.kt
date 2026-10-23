@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
+import com.hupux.ui.components.HupuPullToRefresh
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,6 +37,7 @@ import com.hupux.ui.theme.*
 /** 「全部专区」网格列数。每格约 63dp，5 列时约 16% 的专区名会被截断；6 列会到 40%。 */
 private const val ZONE_GRID_COLUMNS = 5
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ZoneListScreen(
     onZoneClick: (Int, String) -> Unit,
@@ -88,6 +90,12 @@ fun ZoneListScreen(
                     val hotCat   = s.categories.firstOrNull { it.categoryId == 0 }
                     val otherCat = s.categories.filter { it.categoryId != 0 }
 
+                    HupuPullToRefresh(
+                        isRefreshing = s.isRefreshing,
+                        onRefresh    = vm::refresh,
+                        modifier     = Modifier.fillMaxSize(),
+                        topInset     = topPadding
+                    ) {
                     LazyColumn(state = listState, modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
                             top    = topPadding + 12.dp,
@@ -153,6 +161,7 @@ fun ZoneListScreen(
                                 }
                             }
                         }
+                    }
                     }
                 }
             }

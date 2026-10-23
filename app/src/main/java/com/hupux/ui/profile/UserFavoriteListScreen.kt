@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
+import com.hupux.ui.components.HupuPullToRefresh
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,6 +33,7 @@ import com.hupux.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UserFavoriteListScreen(
     onPostClick: (tid: String) -> Unit,
@@ -81,7 +83,13 @@ fun UserFavoriteListScreen(
                         Text("还没有收藏的帖子", color = TextSecondary, fontSize = 14.sp)
                     }
                 }
-            else -> LazyColumn(
+            else -> HupuPullToRefresh(
+                isRefreshing = state.isRefreshing,
+                onRefresh    = vm::refresh,
+                modifier     = Modifier.fillMaxSize(),
+                topInset     = hupuTopBarHeight
+            ) {
+                LazyColumn(
                 state = listState,
                 contentPadding = PaddingValues(top = 12.dp + hupuTopBarHeight, bottom = 16.dp)
             ) {
@@ -101,6 +109,7 @@ fun UserFavoriteListScreen(
                             Text("没有更多了", fontSize = 12.sp, color = TextTertiary)
                         }
                     }
+                }
                 }
             }
         }

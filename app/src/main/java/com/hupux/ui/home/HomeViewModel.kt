@@ -32,6 +32,7 @@ data class HomeUiState(
     val followZoneCursors:   Map<Int, String> = emptyMap(),
     val selectedTab:         Int              = 0,
     val isLoading:           Boolean          = true,
+    val isRefreshing:        Boolean          = false,
     val isLoadingHot:        Boolean          = false,
     val hotError:            String?          = null,
     val isLoadingFollow:     Boolean          = false,
@@ -89,21 +90,41 @@ class HomeViewModel constructor(
         }
     }
 
-    fun loadRecommend() {
+    fun loadRecommend(isRefresh: Boolean = false) {
         viewModelScope.launch {
-            _state.value = HomeUiState(isLoading = true)
+            val current = _state.value
+            _state.value = if (isRefresh && current.recommendPosts.isNotEmpty()) {
+                current.copy(isRefreshing = true, error = null)
+            } else {
+                HomeUiState(isLoading = true)
+            }
             runCatching { homeRepo.getPosts() }
                 .onSuccess { posts ->
                     val banner = posts.filter { it.images.isNotEmpty() }.shuffled().take(5)
-                    _state.value = HomeUiState(
+                    _state.value = _state.value.copy(
                         recommendPosts = posts,
                         bannerPosts    = banner,
-                        isLoading      = false
+                        isLoading      = false,
+                        isRefreshing   = false,
+                        error          = null
                     )
                 }
-                .onFailure {
-                    _state.value = HomeUiState(isLoading = false, error = it.message ?: "加载失败")
+                .onFailure { e ->
+                    _state.value = _state.value.copy(
+                        isLoading    = false,
+                        isRefreshing = false,
+                        error        = e.message ?: "加载失败"
+                    )
                 }
+        }
+    }
+
+    /** 下拉刷新当前 Tab：推荐 / 热榜 / 关注 */
+    fun refreshSelectedTab() {
+        when (_state.value.selectedTab) {
+            0 -> loadRecommend(isRefresh = true)
+            1 -> loadHot(isRefresh = true)
+            2 -> loadFollowedFeed(isRefresh = true)
         }
     }
 
@@ -115,28 +136,44 @@ class HomeViewModel constructor(
         }
     }
 
-    fun loadHot() {
+    fun loadHot(isRefresh: Boolean = false) {
         viewModelScope.launch {
-            _state.value = _state.value.copy(isLoadingHot = true, hotError = null)
+            val current = _state.value
+            _state.value = if (isRefresh && current.hotItems.isNotEmpty()) {
+                current.copy(isRefreshing = true, hotError = null)
+            } else {
+                current.copy(isLoadingHot = true, hotError = null)
+            }
             runCatching { homeRepo.getHotItems() }
                 .onSuccess { items ->
-                    _state.value = _state.value.copy(hotItems = items, isLoadingHot = false)
-                }
-                .onFailure {
                     _state.value = _state.value.copy(
-                        isLoadingHot = false, hotError = it.message ?: "加载失败")
+                        hotItems    = items,
+                        isLoadingHot = false,
+                        isRefreshing = false,
+                        hotError     = null
+                    )
+                }
+                .onFailure { e ->
+                    _state.value = _state.value.copy(
+                        isLoadingHot = false,
+                        isRefreshing = false,
+                        hotError     = e.message ?: "加载失败"
+                    )
                 }
         }
     }
 
-    fun loadFollowedFeed() {
+    fun loadFollowedFeed(isRefresh: Boolean = false) {
         viewModelScope.launch {
-            _state.value = _state.value.copy(isLoadingFollow = true)
+            _state.value = _state.value.copy(
+                isLoadingFollow = !isRefresh,
+                isRefreshing    = isRefresh
+            )
             val zones = followedRepo.getAll().first()
             if (zones.isEmpty()) {
                 _state.value = _state.value.copy(
                     followedPool = emptyList(), followZoneCursors = emptyMap(),
-                    followDisplayCount = 10, isLoadingFollow = false
+                    followDisplayCount = 10, isLoadingFollow = false, isRefreshing = false
                 )
                 return@launch
             }
@@ -147,11 +184,16 @@ class HomeViewModel constructor(
                 }
             }.mapNotNull { it.await() }
 
+            if (isRefresh && results.isEmpty()) {
+                _state.value = _state.value.copy(isLoadingFollow = false, isRefreshing = false)
+                return@launch
+            }
+
             val pool    = results.flatMap { it.second }.sortedBy { parseHupuTime(it.time) }
             val cursors = results.mapNotNull { (id, _, c) -> c?.let { id to it } }.toMap()
             _state.value = _state.value.copy(
                 followedPool = pool, followZoneCursors = cursors,
-                followDisplayCount = 10, isLoadingFollow = false
+                followDisplayCount = 10, isLoadingFollow = false, isRefreshing = false
             )
         }
     }

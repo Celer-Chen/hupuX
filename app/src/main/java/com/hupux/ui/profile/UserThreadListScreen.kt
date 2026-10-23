@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
+import com.hupux.ui.components.HupuPullToRefresh
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,6 +59,7 @@ fun UserThreadListScreen(
 }
 
 /** 发帖列表主体（无顶栏），供「我的发帖」和「用户主页」pill 切换复用 */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UserThreadListBody(
     vm: UserThreadListViewModel,
@@ -92,7 +94,13 @@ fun UserThreadListBody(
                         PillButton("重试", onClick = vm::refresh)
                     }
                 }
-            else -> LazyColumn(
+            else -> HupuPullToRefresh(
+                isRefreshing = state.isRefreshing,
+                onRefresh    = vm::refresh,
+                modifier     = Modifier.fillMaxSize(),
+                topInset     = contentTopPadding
+            ) {
+                LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(top = 12.dp + contentTopPadding, bottom = 16.dp)
@@ -113,6 +121,7 @@ fun UserThreadListBody(
                             Text("没有更多了", fontSize = 12.sp, color = TextTertiary)
                         }
                     }
+                }
                 }
             }
         }

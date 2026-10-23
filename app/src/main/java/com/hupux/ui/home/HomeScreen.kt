@@ -25,6 +25,7 @@ import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material3.*
+import com.hupux.ui.components.HupuPullToRefresh
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,7 +50,7 @@ import com.hupux.data.model.Post
 import com.hupux.ui.theme.*
 import kotlinx.coroutines.delay
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onPostClick: (String) -> Unit,
@@ -160,22 +161,36 @@ fun HomeScreen(
 
         // ── Feed ─────────────────────────────────────────────────
         Box(Modifier.fillMaxSize()) {
+            HupuPullToRefresh(
+                isRefreshing = state.isRefreshing,
+                onRefresh    = vm::refreshSelectedTab,
+                modifier     = Modifier.fillMaxSize()
+            ) {
             when {
                 state.isLoading -> CircularProgressIndicator(
                     Modifier.align(Alignment.Center), color = HupuRed)
-                state.error != null -> Column(
+                state.error != null && state.recommendPosts.isEmpty() -> Column(
                     Modifier.align(Alignment.Center),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(state.error!!, color = HupuRed)
                     Spacer(Modifier.height(12.dp))
-                    PillButton("重试", onClick = vm::loadRecommend)
+                    PillButton("重试", onClick = { vm.loadRecommend() })
                 }
                 state.selectedTab == 0 -> LazyColumn(
                     state = recommendListState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(top = 12.dp, bottom = 8.dp + LocalBottomBarHeight.current)
                 ) {
+                    if (state.error != null) {
+                        item {
+                            Text(
+                                "刷新失败：${state.error}",
+                                color = HupuRed, fontSize = 12.sp,
+                                modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
+                            )
+                        }
+                    }
                     items(state.recommendPosts, key = { it.tid }) { post ->
                         PostCard(post = post, onClick = { onPostClick(post.tid) })
                     }
@@ -184,7 +199,7 @@ fun HomeScreen(
                     items       = state.hotItems,
                     isLoading   = state.isLoadingHot,
                     error       = state.hotError,
-                    onRetry     = vm::loadHot,
+                    onRetry     = { vm.loadHot() },
                     onTopicClick = onTopicClick,
                     listState   = hotListState
                 )
@@ -193,11 +208,12 @@ fun HomeScreen(
                     isLoading     = state.isLoadingFollow,
                     isLoadingMore = state.isLoadingMoreFollow,
                     hasMore       = state.followHasMore,
-                    onRefresh     = vm::loadFollowedFeed,
+                    onRefresh     = { vm.loadFollowedFeed() },
                     onLoadMore    = vm::loadMoreFollowed,
                     onPostClick   = onPostClick,
                     listState     = followedListState
                 )
+            }
             }
         }
     }
@@ -314,10 +330,10 @@ private fun HotFeed(
     listState: LazyListState = rememberLazyListState()
 ) {
     when {
-        isLoading -> Box(Modifier.fillMaxSize(), Alignment.Center) {
+        isLoading && items.isEmpty() -> Box(Modifier.fillMaxSize(), Alignment.Center) {
             CircularProgressIndicator(color = HupuRed)
         }
-        error != null -> Column(Modifier.fillMaxSize(), Arrangement.Center,
+        error != null && items.isEmpty() -> Column(Modifier.fillMaxSize(), Arrangement.Center,
             Alignment.CenterHorizontally) {
             Text(error, color = HupuRed)
             Spacer(Modifier.height(12.dp))
@@ -325,6 +341,15 @@ private fun HotFeed(
         }
         else -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(top = 12.dp, bottom = 8.dp + LocalBottomBarHeight.current)) {
+            if (error != null) {
+                item {
+                    Text(
+                        "刷新失败：$error",
+                        color = HupuRed, fontSize = 12.sp,
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
+                    )
+                }
+            }
             items(items, key = { it.tagId }) { item ->
                 HotItemCard(item, onClick = { onTopicClick(item.tagId, item.tagName) })
             }

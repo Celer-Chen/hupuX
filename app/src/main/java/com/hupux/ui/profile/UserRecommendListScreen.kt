@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
+import com.hupux.ui.components.HupuPullToRefresh
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,6 +30,7 @@ import com.hupux.ui.home.PillButton
 import com.hupux.ui.components.HupuTopBar
 import com.hupux.ui.theme.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UserRecommendListScreen(
     onPostClick: (tid: String) -> Unit,
@@ -70,7 +72,13 @@ fun UserRecommendListScreen(
                         PillButton("重试", onClick = vm::refresh)
                     }
                 }
-            else -> LazyColumn(
+            else -> HupuPullToRefresh(
+                isRefreshing = state.isRefreshing,
+                onRefresh    = vm::refresh,
+                modifier     = Modifier.fillMaxSize(),
+                topInset     = hupuTopBarHeight
+            ) {
+                LazyColumn(
                 state = listState,
                 contentPadding = PaddingValues(top = 12.dp + hupuTopBarHeight, bottom = 16.dp)
             ) {
@@ -90,6 +98,7 @@ fun UserRecommendListScreen(
                             Text("没有更多了", fontSize = 12.sp, color = TextTertiary)
                         }
                     }
+                }
                 }
             }
         }

@@ -17,6 +17,7 @@ data class ZoneDetailUiState(
     val allPosts:      List<Post>  = emptyList(),   // 全量，供两个 tab 共用
     val selectedTab:   Int         = 0,              // 0=全部  1=精华
     val isLoading:     Boolean     = false,
+    val isRefreshing:  Boolean     = false,
     val isLoadingMore: Boolean     = false,
     val error:         String?     = null,
     val nextCursor:    String?     = null,
@@ -43,20 +44,37 @@ class ZoneDetailViewModel constructor(
         load()
     }
 
-    fun load() {
+    fun load() = loadInternal(isRefresh = false)
+
+    fun refresh() = loadInternal(isRefresh = true)
+
+    private fun loadInternal(isRefresh: Boolean) {
         viewModelScope.launch {
-            _state.value = _state.value.copy(isLoading = true, allPosts = emptyList(), nextCursor = null, error = null)
+            val snapshot = _state.value
+            _state.value = if (isRefresh && snapshot.allPosts.isNotEmpty()) {
+                snapshot.copy(isRefreshing = true, error = null)
+            } else {
+                snapshot.copy(
+                    isLoading = true, allPosts = emptyList(),
+                    nextCursor = null, error = null
+                )
+            }
             runCatching { repo.getZonePosts(topicId) }
                 .onSuccess { page ->
                     _state.value = _state.value.copy(
-                        zoneDetail = page.zoneDetail,
-                        allPosts   = page.posts,
-                        nextCursor = page.nextCursor,
-                        isLoading  = false
+                        zoneDetail   = page.zoneDetail,
+                        allPosts     = page.posts,
+                        nextCursor   = page.nextCursor,
+                        isLoading    = false,
+                        isRefreshing = false
                     )
                 }
-                .onFailure {
-                    _state.value = _state.value.copy(isLoading = false, error = it.message ?: "加载失败")
+                .onFailure { e ->
+                    _state.value = _state.value.copy(
+                        isLoading    = false,
+                        isRefreshing = false,
+                        error        = e.message ?: "加载失败"
+                    )
                 }
         }
     }

@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import com.hupux.ui.components.HupuPullToRefresh
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,6 +32,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScoreScreen(
     onMatchClick: (bizType: String, bizNo: String) -> Unit,
@@ -129,7 +131,13 @@ fun ScoreScreen(
                     "暂无赛程", color = TextSecondary, fontSize = 14.sp,
                     modifier = Modifier.align(Alignment.Center))
 
-                else -> LazyColumn(
+                else -> HupuPullToRefresh(
+                    isRefreshing = state.isRefreshing,
+                    onRefresh    = vm::refresh,
+                    modifier     = Modifier.fillMaxSize(),
+                    topInset     = topPadding
+                ) {
+                    LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(
@@ -155,6 +163,7 @@ fun ScoreScreen(
                                 onMatchClick(m.scoreBizType, m.scoreBizNo)
                             }
                         }
+                    }
                     }
                 }
             }

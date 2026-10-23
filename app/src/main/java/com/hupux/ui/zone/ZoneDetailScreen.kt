@@ -12,6 +12,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import com.hupux.ui.components.HupuPullToRefresh
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,6 +32,7 @@ import com.hupux.data.model.ZoneDetail
 import com.hupux.ui.home.PillButton
 import com.hupux.ui.theme.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ZoneDetailScreen(
     topicId: Int, topicName: String,
@@ -122,15 +124,21 @@ fun ZoneDetailScreen(
             when {
                 state.isLoading -> CircularProgressIndicator(
                     Modifier.align(Alignment.Center), color = HupuRed)
-                state.error != null -> Column(
+                state.error != null && state.posts.isEmpty() -> Column(
                     Modifier.align(Alignment.Center),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(state.error!!, color = HupuRed)
                     Spacer(Modifier.height(12.dp))
-                    PillButton("重试", onClick = vm::load)
+                    PillButton("重试", onClick = { vm.load() })
                 }
-                else -> LazyColumn(Modifier.fillMaxSize(),
+                else -> HupuPullToRefresh(
+                    isRefreshing = state.isRefreshing,
+                    onRefresh    = vm::refresh,
+                    modifier     = Modifier.fillMaxSize(),
+                    topInset     = topPadding
+                ) {
+                    LazyColumn(Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(top = topPadding + 8.dp, bottom = 16.dp)) {
                     itemsIndexed(state.posts, key = { _, post -> post.tid }) { index, post ->
                         if (index == state.posts.size - 3 && state.nextCursor != null)
@@ -143,6 +151,7 @@ fun ZoneDetailScreen(
                                 CircularProgressIndicator(Modifier.size(24.dp), color = HupuRed)
                             }
                         }
+                    }
                     }
                 }
             }

@@ -21,6 +21,7 @@ class UserReplyListViewModel constructor(
     data class State(
         val items: List<UserReply> = emptyList(),
         val isLoading: Boolean = false,
+        val isRefreshing: Boolean = false,
         val hasMore: Boolean = false,
         val error: String? = null
     )
@@ -33,30 +34,37 @@ class UserReplyListViewModel constructor(
     init { loadInternal() }
 
     fun load() {
-        if (_state.value.isLoading) return
-        loadInternal()
+        if (_state.value.isLoading || _state.value.isRefreshing) return
+        loadInternal(isRefresh = false)
     }
 
-    private fun loadInternal() {
+    private fun loadInternal(isRefresh: Boolean = false) {
         viewModelScope.launch(Dispatchers.IO) {
-            _state.value = _state.value.copy(isLoading = true, error = null)
+            val hasItems = _state.value.items.isNotEmpty()
+            _state.value = _state.value.copy(
+                isLoading    = !isRefresh || !hasItems,
+                isRefreshing = isRefresh,
+                error        = null
+            )
             try {
                 val page = scraper.fetchReplyList(uid, maxTime)
                 maxTime = page.maxTime
                 _state.value = _state.value.copy(
-                    items     = _state.value.items + page.replies,
-                    hasMore   = page.hasMore,
-                    isLoading = false
+                    items        = if (isRefresh) page.replies else _state.value.items + page.replies,
+                    hasMore      = page.hasMore,
+                    isLoading    = false,
+                    isRefreshing = false
                 )
             } catch (e: Exception) {
-                _state.value = _state.value.copy(isLoading = false, error = e.message)
+                _state.value = _state.value.copy(
+                    isLoading = false, isRefreshing = false, error = e.message)
             }
         }
     }
 
     fun refresh() {
+        if (_state.value.isRefreshing) return
         maxTime = 0L
-        _state.value = State()
-        loadInternal()
+        loadInternal(isRefresh = true)
     }
 }

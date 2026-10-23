@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
+import com.hupux.ui.components.HupuPullToRefresh
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -106,6 +107,7 @@ fun MessageScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MessageTabContent(
     tab: MessageViewModel.TabState,
@@ -143,7 +145,13 @@ private fun MessageTabContent(
             Box(Modifier.fillMaxSize(), Alignment.Center) {
                 Text("暂无消息", color = TextTertiary, fontSize = 14.sp)
             }
-        else -> LazyColumn(
+        else -> HupuPullToRefresh(
+            isRefreshing = tab.isRefreshing,
+            onRefresh    = onRetry,
+            modifier     = Modifier.fillMaxSize(),
+            topInset     = contentTopPadding
+        ) {
+            LazyColumn(
             state = listState,
             contentPadding = PaddingValues(top = 12.dp + contentTopPadding, bottom = 16.dp)
         ) {
@@ -163,6 +171,7 @@ private fun MessageTabContent(
                         Text("没有更多了", fontSize = 12.sp, color = TextTertiary)
                     }
                 }
+            }
             }
         }
     }

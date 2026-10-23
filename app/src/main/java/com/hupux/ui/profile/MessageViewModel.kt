@@ -16,6 +16,7 @@ class MessageViewModel constructor(
     data class TabState(
         val items: List<MessageItem> = emptyList(),
         val isLoading: Boolean = false,
+        val isRefreshing: Boolean = false,
         val hasMore: Boolean = false,
         val error: String? = null,
         val nextPageStr: String = ""
@@ -46,27 +47,39 @@ class MessageViewModel constructor(
 
     fun refresh() {
         val tabKey = _state.value.selectedTab
-        _state.value = _state.value.copy(
-            tabs = _state.value.tabs + (tabKey to TabState())
-        )
-        loadTab(tabKey)
+        val tab = _state.value.tabs[tabKey] ?: TabState()
+        if (tab.isRefreshing) return
+        updateTab(tabKey) { it.copy(isRefreshing = true, error = null) }
+        loadTab(tabKey, pageStr = null, isRefresh = true)
     }
 
-    private fun loadTab(tabKey: Int, pageStr: String? = null) {
+    private fun loadTab(tabKey: Int, pageStr: String? = null, isRefresh: Boolean = false) {
         viewModelScope.launch {
-            updateTab(tabKey) { it.copy(isLoading = true, error = null) }
+            val hasItems = _state.value.tabs[tabKey]?.items?.isNotEmpty() == true
+            updateTab(tabKey) {
+                it.copy(
+                    isLoading    = !isRefresh || !hasItems,
+                    isRefreshing = isRefresh,
+                    error        = null
+                )
+            }
             try {
                 val page = repo.fetchMessages(tabKey, pageStr)
                 updateTab(tabKey) { tab ->
                     tab.copy(
-                        items       = if (pageStr == null) page.items else tab.items + page.items,
+                        items       = if (isRefresh) page.items
+                                      else if (pageStr == null) page.items
+                                      else tab.items + page.items,
                         hasMore     = page.hasNextPage,
                         nextPageStr = page.nextPageStr,
-                        isLoading   = false
+                        isLoading   = false,
+                        isRefreshing = false
                     )
                 }
             } catch (e: Exception) {
-                updateTab(tabKey) { it.copy(isLoading = false, error = e.message) }
+                updateTab(tabKey) {
+                    it.copy(isLoading = false, isRefreshing = false, error = e.message)
+                }
             }
         }
     }

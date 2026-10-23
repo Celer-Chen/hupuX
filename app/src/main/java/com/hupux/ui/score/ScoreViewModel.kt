@@ -18,6 +18,7 @@ data class ScoreUiState(
     /** 虎扑给的定位锚点 matchId，界面据此滚到今天附近；为空表示没给 */
     val anchorMatchId: String = "",
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val error: String? = null
 )
 
@@ -43,6 +44,7 @@ class ScoreViewModel constructor(
                     days          = cached.days,
                     anchorMatchId = cached.anchorMatchId,
                     isLoading     = false,
+                    isRefreshing  = false,
                     error         = null
                 )
             }
@@ -51,8 +53,16 @@ class ScoreViewModel constructor(
         }
     }
 
-    fun load(tag: MatchTag = _state.value.tag) {
-        _state.update { it.copy(tag = tag, isLoading = true, error = null) }
+    fun refresh() = load(_state.value.tag, isRefresh = true)
+
+    fun load(tag: MatchTag = _state.value.tag, isRefresh: Boolean = false) {
+        _state.update {
+            if (isRefresh && it.tag == tag && it.days.isNotEmpty()) {
+                it.copy(isRefreshing = true, error = null)
+            } else {
+                it.copy(tag = tag, isLoading = true, error = null)
+            }
+        }
         viewModelScope.launch {
             runCatching { scraper.fetchSchedule(tag) }
                 .onSuccess { schedule ->
@@ -62,14 +72,19 @@ class ScoreViewModel constructor(
                         else it.copy(
                             days          = schedule.days,
                             anchorMatchId = schedule.anchorMatchId,
-                            isLoading     = false
+                            isLoading     = false,
+                            isRefreshing  = false
                         )
                     }
                 }
                 .onFailure { e ->
                     _state.update {
                         if (it.tag != tag) it
-                        else it.copy(isLoading = false, error = e.message ?: "加载失败")
+                        else it.copy(
+                            isLoading    = false,
+                            isRefreshing = false,
+                            error        = e.message ?: "加载失败"
+                        )
                     }
                 }
         }
