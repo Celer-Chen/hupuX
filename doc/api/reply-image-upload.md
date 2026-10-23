@@ -152,7 +152,7 @@ JS 实测提交体（回复分支，`type==="reply"`）：
 
 ## 接入实现建议（复用现有上传器）
 
-现有上传器 `HupuImageUploader`（Android）/ `DesktopImageUploader`（桌面）已实现发帖插图的完整 OSS 链路。
+现有上传器 `HupuImageUploader` 已实现发帖插图的完整 OSS 链路。
 接入回复插图只需把硬编码的 `HSS_MODULE`/`HSS_PATH` 参数化：
 
 | 常量 | 发帖 | 回复 |

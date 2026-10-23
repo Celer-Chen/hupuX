@@ -121,5 +121,4 @@ Feed Card   阴影 1dp      圆角 16dp   内边距 16dp
 - Hero Banner 重做（现在仍是顶栏内的轮播，未做成独立卡片 + 渐变遮罩）
 - 首页发帖 FAB（发帖需要 `topicId`，首页放 FAB 要先定「怎么选专区」的交互，
   属于产品改动而非视觉改动）
-- 桌面端 / iOS 的视觉对齐（两端各有独立主题，本次只改了 Android）
 - Skeleton / Empty State / Error State / 下拉刷新动画

@@ -166,9 +166,6 @@ Body: {"videoUrl":"<上一步的 videoUrl>"}
 
 涉及文件：`HupuImageUploader.kt`(uploadVideo)、`HupuDesktopScraper.kt`(getVideoCover/createVideoThread)、
 `PostRepository.kt`、`NewPostViewModel.kt`、`NewPostScreen.kt`。
-桌面端同构实现在 `DesktopImageUploader.kt`（存档落 `~/.hupux/upload-checkpoints/<md5>.json`），
-iOS 在 `HupuUploader.swift`（`uploadVideo(fileURL:onProgress:)`，`PickedVideo` 把选中的视频落到临时文件再分片读，
-存档走 UserDefaults）。
 
 ## 端到端实测结论（2026-09-16）
 
@@ -220,4 +217,3 @@ curl 实证（同一个 uploadId 连发两次）：
 
 修法：用 `xml.toByteArray().toRequestBody("application/xml".toMediaType())`，
 `ByteArray` 版不会追加 charset。图片上传一直正常就是因为它走的 `ByteArray` 版。
-iOS 用 URLSession 手动 `setValue` header，不受影响。
