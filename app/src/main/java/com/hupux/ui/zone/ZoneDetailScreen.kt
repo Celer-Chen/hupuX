@@ -81,7 +81,7 @@ fun ZoneDetailScreen(
                             modifier = Modifier.size(52.dp).clip(CircleShape)
                                 .background(Color.White.copy(0.2f)))
                         Spacer(Modifier.width(14.dp))
-                        Column {
+                        Column(Modifier.weight(1f)) {
                             if (zone.desc.isNotEmpty())
                                 Text(zone.desc, fontSize = 12.sp, color = onHeader.copy(0.75f),
                                     maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -91,6 +91,24 @@ fun ZoneDetailScreen(
                                 Spacer(Modifier.width(16.dp))
                                 Text("成员 ${zone.followedUserNum}", fontSize = 11.sp, color = onHeader.copy(0.7f))
                             }
+                        }
+                        // 关注/取关（本地保存，与发现页徽标同一份数据）
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .height(30.dp)
+                                .defaultMinSize(minWidth = 68.dp)
+                                .background(
+                                    if (state.isFollowed) Color.White.copy(0.2f) else HupuRed,
+                                    RoundedCornerShape(15.dp))
+                                .clickable { vm.toggleFollow() }
+                                .padding(horizontal = 14.dp)
+                        ) {
+                            Text(
+                                if (state.isFollowed) "已关注" else "+ 关注",
+                                fontSize = 13.sp, fontWeight = FontWeight.Medium,
+                                color = if (state.isFollowed) onHeader.copy(0.85f) else Color.White
+                            )
                         }
                     }
                 }

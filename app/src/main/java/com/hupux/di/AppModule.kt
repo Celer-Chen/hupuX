@@ -111,7 +111,7 @@ val appModule = module {
     viewModel { ScoreViewModel(get()) }
     viewModel { ScoreDetailViewModel(get()) }
     viewModel { ScoreItemViewModel(get(), get<CookiePreferences>()) }
-    viewModel { ZoneDetailViewModel(get(), get<CookiePreferences>()) }
+    viewModel { ZoneDetailViewModel(get(), get(), get<CookiePreferences>()) }
     viewModel { ZoneListViewModel(get(), get()) }
     viewModel { TopicDetailViewModel(get()) }
     viewModel { SearchViewModel(get(), get()) }

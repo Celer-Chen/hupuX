@@ -4,7 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hupux.data.local.CookiePreferences
 import com.hupux.data.model.Post
+import com.hupux.data.model.Zone
 import com.hupux.data.model.ZoneDetail
+import com.hupux.data.repository.FollowedZonesRepository
 import com.hupux.data.repository.ZoneRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,7 +23,8 @@ data class ZoneDetailUiState(
     val isLoadingMore: Boolean     = false,
     val error:         String?     = null,
     val nextCursor:    String?     = null,
-    val isLoggedIn:    Boolean     = false
+    val isLoggedIn:    Boolean     = false,
+    val isFollowed:    Boolean     = false
 ) {
     // 精华 = recommendNum ≥ 阈值
     val posts: List<Post> get() = if (selectedTab == 0) allPosts
@@ -30,6 +33,7 @@ data class ZoneDetailUiState(
 
 class ZoneDetailViewModel constructor(
     private val repo: ZoneRepository,
+    private val followedRepo: FollowedZonesRepository,
     private val cookiePrefs: CookiePreferences
 ) : ViewModel() {
 
@@ -41,7 +45,27 @@ class ZoneDetailViewModel constructor(
     fun init(id: Int) {
         if (topicId == id && _state.value.allPosts.isNotEmpty()) return
         topicId = id
+        viewModelScope.launch {
+            // 关注状态实时跟随本地库（发现页徽标切换后回来也要是最新状态）
+            runCatching { followedRepo.isFollowed(id) }
+                .onSuccess { followed -> _state.value = _state.value.copy(isFollowed = followed) }
+        }
         load()
+    }
+
+    /** 关注/取关当前专区（本地保存，与发现页徽标同一份数据） */
+    fun toggleFollow() {
+        val z = _state.value.zoneDetail ?: return
+        val zone = Zone(
+            topicId    = z.topicId,
+            topicName  = z.name,
+            topicLogo  = z.logo,
+            count      = z.allThreadNum
+        )
+        viewModelScope.launch {
+            followedRepo.toggle(zone)
+            _state.value = _state.value.copy(isFollowed = followedRepo.isFollowed(z.topicId))
+        }
     }
 
     fun load() = loadInternal(isRefresh = false)

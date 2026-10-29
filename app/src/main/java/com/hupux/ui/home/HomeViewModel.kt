@@ -14,6 +14,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
 /**
  * 「今日比分」的刷新间隔。
@@ -22,6 +24,12 @@ import kotlinx.coroutines.launch
  * 抓一次不便宜，所以回到前台时按这个间隔节流，而不是每次都真的去抓。
  */
 private const val MATCH_REFRESH_INTERVAL_MS = 2 * 60 * 1000L
+
+/**
+ * 关注流抓取的并发上限。关注 N 个专区就并发 N 个请求会把虎扑打毛，
+ * 也容易在低端机上抢带宽；这里按批次限流（实际吞吐约为 3 路并发）。
+ */
+private const val FOLLOW_FETCH_CONCURRENCY = 3
 
 data class HomeUiState(
     val recommendPosts:      List<Post>       = emptyList(),
@@ -177,10 +185,13 @@ class HomeViewModel constructor(
                 )
                 return@launch
             }
+            val sem = Semaphore(FOLLOW_FETCH_CONCURRENCY)
             val results = zones.map { zone ->
                 async(Dispatchers.IO) {
-                    runCatching { zoneRepo.getZonePosts(zone.topicId) }.getOrNull()
-                        ?.let { page -> Triple(zone.topicId, page.posts.map { it.copy(label = zone.topicName) }, page.nextCursor) }
+                    sem.withPermit {
+                        runCatching { zoneRepo.getZonePosts(zone.topicId) }.getOrNull()
+                            ?.let { page -> Triple(zone.topicId, page.posts.map { it.copy(label = zone.topicName) }, page.nextCursor) }
+                    }
                 }
             }.mapNotNull { it.await() }
 
@@ -213,11 +224,14 @@ class HomeViewModel constructor(
             val zones   = followedRepo.getAll().first().associateBy { it.topicId }
             val cursors = _state.value.followZoneCursors
 
+            val sem = Semaphore(FOLLOW_FETCH_CONCURRENCY)
             val results = cursors.entries.map { (topicId, cursor) ->
                 async(Dispatchers.IO) {
-                    val name = zones[topicId]?.topicName ?: ""
-                    runCatching { zoneRepo.getZonePosts(topicId, cursor) }.getOrNull()
-                        ?.let { page -> Triple(topicId, page.posts.map { it.copy(label = name) }, page.nextCursor) }
+                    sem.withPermit {
+                        val name = zones[topicId]?.topicName ?: ""
+                        runCatching { zoneRepo.getZonePosts(topicId, cursor) }.getOrNull()
+                            ?.let { page -> Triple(topicId, page.posts.map { it.copy(label = name) }, page.nextCursor) }
+                    }
                 }
             }.mapNotNull { it.await() }
 
