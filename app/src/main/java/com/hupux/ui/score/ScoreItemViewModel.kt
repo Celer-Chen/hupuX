@@ -27,7 +27,15 @@ data class ScoreItemUiState(
     /** 正在回复的评论；null 表示发新评论 */
     val replyTo: ScoreComment? = null,
     /** 输入框内容。放在 state 里是为了「失败不清空、成功才清空」*/
-    val draft: String = ""
+    val draft: String = "",
+    /** 已展开的楼中楼：parentCommentId -> 子回复列表 */
+    val subComments: Map<String, List<ScoreComment>> = emptyMap(),
+    /** 楼中楼翻页游标；0 表示没有更多 */
+    val subCursors: Map<String, Long> = emptyMap(),
+    /** 正在展开/加载子回复的父评论 id 集合 */
+    val loadingSubs: Set<String> = emptySet(),
+    /** 已展开的父评论 id 集合（用于控制「收起」） */
+    val expandedParents: Set<String> = emptySet()
 )
 
 class ScoreItemViewModel(
@@ -146,6 +154,48 @@ class ScoreItemViewModel(
         }
     }
 
+    /** 展开/收起某条评论的楼中楼；首次展开自动拉第一页 */
+    fun toggleSubComments(parent: ScoreComment) {
+        val s = _state.value
+        if (parent.commentId in s.expandedParents) {
+            _state.update { it.copy(expandedParents = it.expandedParents - parent.commentId) }
+            return
+        }
+        _state.update { it.copy(expandedParents = it.expandedParents + parent.commentId) }
+        // 已有数据就不再请求（比如刚回复完本地已有）
+        if (s.subComments[parent.commentId].isNullOrEmpty() && parent.commentId !in s.loadingSubs) {
+            loadSubComments(parent, reset = true)
+        }
+    }
+
+    /** 拉取楼中楼（首页或下一页） */
+    fun loadSubComments(parent: ScoreComment, reset: Boolean = false) {
+        val s = _state.value
+        if (parent.commentId in s.loadingSubs) return
+        val cursor = if (reset) 0L else s.subCursors[parent.commentId] ?: 0L
+        if (!reset && cursor == 0L) return   // 没有更多
+        _state.update { it.copy(loadingSubs = it.loadingSubs + parent.commentId) }
+        viewModelScope.launch {
+            runCatching {
+                scraper.fetchSubComments(bizType, bizNo, parent.commentId, cursor)
+            }.onSuccess { page ->
+                _state.update { st ->
+                    val existing = if (reset) emptyList() else (st.subComments[parent.commentId] ?: emptyList())
+                    val merged = (existing + page.comments).distinctBy { it.commentId }
+                    st.copy(
+                        subComments    = st.subComments + (parent.commentId to merged),
+                        subCursors     = st.subCursors + (parent.commentId to if (page.hasMore) page.cursor else 0L),
+                        loadingSubs    = st.loadingSubs - parent.commentId
+                    )
+                }
+            }.onFailure { e ->
+                _state.update {
+                    it.copy(loadingSubs = it.loadingSubs - parent.commentId, toast = e.message ?: "加载回复失败")
+                }
+            }
+        }
+    }
+
     fun consumeToast() = _state.update { it.copy(toast = null) }
 
     // ── 内部 ──────────────────────────────────────────────────────────────
@@ -158,7 +208,12 @@ class ScoreItemViewModel(
 
     private fun updateComment(id: String, transform: (ScoreComment) -> ScoreComment) {
         _state.update { s ->
-            s.copy(comments = s.comments.map { if (it.commentId == id) transform(it) else it })
+            s.copy(
+                comments = s.comments.map { if (it.commentId == id) transform(it) else it },
+                subComments = s.subComments.mapValues { (_, list) ->
+                    list.map { if (it.commentId == id) transform(it) else it }
+                }
+            )
         }
     }
 

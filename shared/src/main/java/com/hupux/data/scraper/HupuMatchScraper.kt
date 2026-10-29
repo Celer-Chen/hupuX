@@ -458,6 +458,35 @@ class HupuMatchScraper(
         )
     }
 
+    /**
+     * 楼中楼：拉取某条主评论的子回复（20 条/页）。
+     * [parentCommentId] 为主评论的 commentId；[cursor] 传上一页返回的 cursor 继续翻页。
+     * 返回结构与主评论一致（commentKey.subjectId 同样可用于回复/点亮）。
+     */
+    suspend fun fetchSubComments(
+        bizType: String,
+        bizNo: String,
+        parentCommentId: String,
+        cursor: Long = 0L
+    ): ScoreCommentPage {
+        val publishTime = if (cursor > 0) cursor else nowMillis()
+        val body = authGet(
+            "$COMMENT_API/list/primarySingleRow/subCommentList" +
+                "?publishTime=$publishTime&outBizNo=$bizNo&outBizType=$bizType" +
+                "&queryType=latest&parentCommentId=$parentCommentId&pageSize=20&clientCode=&cid="
+        )
+        val data = parseJsonObject(body).obj("data")
+            ?: return ScoreCommentPage(emptyList(), 0, 0, false)
+        val comments = (data.arr("comments") ?: EmptyJsonArray).mapNotNull { parseComment(it.obj) }
+        val next = data.obj("cursor")?.long_("publishTime") ?: 0L
+        return ScoreCommentPage(
+            comments   = comments,
+            totalCount = data.long_("commentCount") ?: 0L,
+            cursor     = next,
+            hasMore    = (data.bool_("hasMore") ?: (next > 0)) && comments.isNotEmpty()
+        )
+    }
+
     private fun parseComment(c: JsonObject): ScoreComment? {
         val id = c.str("commentId") ?: return null
         val content = c.str("commentContent") ?: ""

@@ -15,8 +15,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -72,10 +74,19 @@ fun ScoreItemScreen(
         // 刻意不吃 padding：留白改由列表的 contentPadding 补回来
         Box(Modifier.fillMaxSize().hazeSource()) {
             when {
-                state.isLoading -> CircularProgressIndicator(
-                    Modifier.align(Alignment.Center), color = HupuRed)
+                state.isLoading -> LazyColumn(
+                    Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        top    = 12.dp + padding.calculateTopPadding(),
+                        bottom = 12.dp + padding.calculateBottomPadding()
+                    )
+                ) {
+                    item { ItemHeaderSkeleton() }
+                    item { CommentListHeader(count = null) }
+                    items(4) { CommentSkeleton() }
+                }
 
-                state.error != null -> Column(
+                state.error != null && state.comments.isEmpty() -> Column(
                     Modifier.align(Alignment.Center),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
@@ -94,27 +105,27 @@ fun ScoreItemScreen(
                     state.detail?.let { d ->
                         item { ItemHeader(d, onRate = { showRating = true }) }
                     }
-                    item {
-                        Text(
-                            if (state.totalComments > 0) "评论 ${state.totalComments}" else "评论",
-                            fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary,
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
-                        )
-                    }
+                    item { CommentListHeader(state.totalComments) }
                     if (state.comments.isEmpty()) {
-                        item {
-                            Text(
-                                "还没有评论，来说两句",
-                                fontSize = 13.sp, color = TextTertiary,
-                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 20.dp)
-                            )
-                        }
+                        item { CommentEmptyState(onPost = { vm.startReply(null) }) }
                     }
-                    items(state.comments) { c ->
+                    items(state.comments, key = { it.commentId }) { c ->
+                        val expanded   = c.commentId in state.expandedParents
+                        val subs       = state.subComments[c.commentId] ?: emptyList()
+                        val subLoading = c.commentId in state.loadingSubs
+                        val subCursor  = state.subCursors[c.commentId] ?: 0L
                         CommentRow(
-                            comment = c,
-                            onReply = { vm.startReply(c) },
-                            onLight = { vm.toggleLight(c) }
+                            comment          = c,
+                            onReply          = { vm.startReply(c) },
+                            onLight          = { vm.toggleLight(c) },
+                            onToggleSubs     = if (c.subCommentCount > 0) ({ vm.toggleSubComments(c) }) else null,
+                            expanded         = expanded,
+                            subComments      = subs,
+                            isSubLoading     = subLoading,
+                            hasMoreSubs      = subCursor != 0L,
+                            onLoadMoreSubs   = { vm.loadSubComments(c) },
+                            onSubReply       = { vm.startReply(it) },
+                            onSubLight       = { vm.toggleLight(it) }
                         )
                     }
                     if (state.hasMore) {
@@ -141,6 +152,84 @@ fun ScoreItemScreen(
         )
     }
     }
+}
+
+// ─── 评论区标题 / 空态 / 骨架屏 ──────────────────────────────────────────────
+
+@Composable
+private fun CommentListHeader(count: Long?) {
+    Text(
+        if (count != null && count > 0) "评论 $count" else "评论",
+        fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary,
+        modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
+    )
+}
+
+@Composable
+private fun CommentEmptyState(onPost: () -> Unit) {
+    Column(
+        Modifier.fillMaxWidth().padding(vertical = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("💬", fontSize = 36.sp)
+        Spacer(Modifier.height(12.dp))
+        Text("还没有评论", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = TextSecondary)
+        Spacer(Modifier.height(6.dp))
+        Text("来说两句，给 TA 打个分吧", fontSize = 12.sp, color = TextTertiary)
+        Spacer(Modifier.height(18.dp))
+        PillButton("写评论", onClick = onPost)
+    }
+}
+
+@Composable
+private fun ItemHeaderSkeleton() {
+    Surface(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(16.dp), color = CardBg, shadowElevation = 1.dp
+    ) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(56.dp).clip(CircleShape).background(BgGray))
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                SkeletonBox(Modifier.width(120.dp).height(18.dp))
+                Spacer(Modifier.height(10.dp))
+                SkeletonBox(Modifier.width(80.dp).height(12.dp))
+            }
+            SkeletonBox(Modifier.width(64.dp).height(30.dp), RoundedCornerShape(15.dp))
+        }
+    }
+}
+
+@Composable
+private fun CommentSkeleton() {
+    Surface(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(12.dp), color = CardBg, shadowElevation = 1.dp
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(28.dp).clip(CircleShape).background(BgGray))
+                Spacer(Modifier.width(8.dp))
+                SkeletonBox(Modifier.width(90.dp).height(13.dp))
+            }
+            Spacer(Modifier.height(12.dp))
+            SkeletonBox(Modifier.fillMaxWidth().height(13.dp))
+            Spacer(Modifier.height(8.dp))
+            SkeletonBox(Modifier.width(220.dp).height(13.dp))
+            Spacer(Modifier.height(12.dp))
+            SkeletonBox(Modifier.width(140.dp).height(11.dp))
+        }
+    }
+}
+
+/** 占位灰块（横向渐变，提示「内容加载中」） */
+@Composable
+private fun SkeletonBox(modifier: Modifier, shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(6.dp)) {
+    Box(
+        modifier
+            .clip(shape)
+            .background(Brush.horizontalGradient(listOf(BgGray, BgGray.copy(alpha = 0.45f), BgGray)))
+    )
 }
 
 // ─── 头部：头像 / 统计 / 平均分 / 我的评分 ────────────────────────────────────
@@ -284,7 +373,19 @@ private fun RatingDialog(
 // ─── 评论 ────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun CommentRow(comment: ScoreComment, onReply: () -> Unit, onLight: () -> Unit) {
+private fun CommentRow(
+    comment: ScoreComment,
+    onReply: () -> Unit,
+    onLight: () -> Unit,
+    onToggleSubs: (() -> Unit)? = null,
+    expanded: Boolean = false,
+    subComments: List<ScoreComment> = emptyList(),
+    isSubLoading: Boolean = false,
+    hasMoreSubs: Boolean = false,
+    onLoadMoreSubs: () -> Unit = {},
+    onSubReply: (ScoreComment) -> Unit = {},
+    onSubLight: (ScoreComment) -> Unit = {}
+) {
     Surface(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         shape = RoundedCornerShape(12.dp), color = CardBg, shadowElevation = 1.dp
@@ -337,6 +438,107 @@ private fun CommentRow(comment: ScoreComment, onReply: () -> Unit, onLight: () -
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 )
             }
+
+            // ── 楼中楼 ────────────────────────────────────────────
+            if (onToggleSubs != null) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    if (expanded) "收起回复" else "查看 ${comment.subCommentCount} 条回复",
+                    fontSize = 12.sp, fontWeight = FontWeight.Medium, color = HupuRed,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(onClick = onToggleSubs)
+                        .padding(horizontal = 6.dp, vertical = 4.dp)
+                )
+            }
+            if (expanded) {
+                Spacer(Modifier.height(6.dp))
+                Surface(
+                    color = BgGray.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                        subComments.forEach { sub ->
+                            SubCommentRow(
+                                comment = sub,
+                                onReply = { onSubReply(sub) },
+                                onLight = { onSubLight(sub) }
+                            )
+                        }
+                        if (isSubLoading) {
+                            Box(Modifier.fillMaxWidth().padding(10.dp), Alignment.Center) {
+                                CircularProgressIndicator(Modifier.size(18.dp),
+                                    color = HupuRed, strokeWidth = 2.dp)
+                            }
+                        }
+                        if (hasMoreSubs && !isSubLoading) {
+                            Text(
+                                "加载更多回复",
+                                fontSize = 12.sp, color = HupuRed, fontWeight = FontWeight.Medium,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable(onClick = onLoadMoreSubs)
+                                    .padding(vertical = 6.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 楼中楼里的一条子回复（样式同主评论，字号略小） */
+@Composable
+private fun SubCommentRow(comment: ScoreComment, onReply: () -> Unit, onLight: () -> Unit) {
+    Column(Modifier.clickable(onClick = onReply).padding(vertical = 5.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            AsyncImage(
+                model = comment.userHead, contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.size(22.dp).clip(CircleShape).background(CardBg)
+            )
+            Spacer(Modifier.width(7.dp))
+            Text(comment.userName, fontSize = 12.sp, fontWeight = FontWeight.Medium,
+                color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f))
+            if (comment.score > 0) {
+                Surface(color = TagBg, shape = RoundedCornerShape(999.dp)) {
+                    Text("打了 ${comment.score} 分", fontSize = 9.sp, color = HupuRed,
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp))
+                }
+            }
+        }
+        Spacer(Modifier.height(5.dp))
+        Text(comment.content, fontSize = 13.sp, lineHeight = 19.sp, color = TextPrimary)
+        comment.images.forEach { url ->
+            Spacer(Modifier.height(6.dp))
+            AsyncImage(
+                model = url, contentDescription = null,
+                contentScale = ContentScale.FillWidth,
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+            )
+        }
+        Spacer(Modifier.height(5.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                buildString {
+                    append(comment.date)
+                    if (comment.ipLocation.isNotEmpty()) append(" · ${comment.ipLocation}")
+                },
+                fontSize = 10.sp, color = TextTertiary, modifier = Modifier.weight(1f)
+            )
+            Text(
+                if (comment.lightCount > 0) "👍 ${comment.lightCount}" else "👍",
+                fontSize = 11.sp,
+                color = if (comment.hasLight) HupuRed else TextTertiary,
+                modifier = Modifier.clip(RoundedCornerShape(8.dp))
+                    .clickable(onClick = onLight)
+                    .padding(horizontal = 5.dp, vertical = 2.dp)
+            )
         }
     }
 }
