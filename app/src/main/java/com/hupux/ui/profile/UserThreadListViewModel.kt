@@ -1,70 +1,25 @@
 package com.hupux.ui.profile
 
 import androidx.lifecycle.SavedStateHandle
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.hupux.data.model.UserThread
 import com.hupux.data.scraper.HupuDesktopScraper
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
+import com.hupux.ui.components.PagingViewModel
+import com.hupux.ui.components.PageResult
 
 class UserThreadListViewModel constructor(
     private val scraper: HupuDesktopScraper,
     savedState: SavedStateHandle
-) : ViewModel() {
+) : PagingViewModel<UserThread>() {
 
     private val uid: String = savedState.get<String>("uid") ?: ""
-
-    data class State(
-        val items: List<UserThread> = emptyList(),
-        val isLoading: Boolean = false,
-        val isRefreshing: Boolean = false,
-        val hasMore: Boolean = false,
-        val error: String? = null
-    )
-
-    private val _state = MutableStateFlow(State())
-    val state: StateFlow<State> = _state.asStateFlow()
-
     private var nextMaxTime = 0L
 
-    init { loadInternal() }
-
-    fun load() {
-        if (_state.value.isLoading || _state.value.isRefreshing) return
-        loadInternal(isRefresh = false)
+    override suspend fun fetchPage(page: Int): PageResult<UserThread> {
+        if (page == 1) nextMaxTime = 0L
+        val data = scraper.fetchThreadList(uid, nextMaxTime)
+        nextMaxTime = data.nextMaxTime
+        return PageResult(data.threads, data.hasMore)
     }
 
-    private fun loadInternal(isRefresh: Boolean = false) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val hasItems = _state.value.items.isNotEmpty()
-            _state.value = _state.value.copy(
-                isLoading    = !isRefresh || !hasItems,
-                isRefreshing = isRefresh,
-                error        = null
-            )
-            try {
-                val page = scraper.fetchThreadList(uid, nextMaxTime)
-                nextMaxTime = page.nextMaxTime
-                _state.value = _state.value.copy(
-                    items        = if (isRefresh) page.threads else _state.value.items + page.threads,
-                    hasMore      = page.hasMore,
-                    isLoading    = false,
-                    isRefreshing = false
-                )
-            } catch (e: Exception) {
-                _state.value = _state.value.copy(
-                    isLoading = false, isRefreshing = false, error = e.message)
-            }
-        }
-    }
-
-    fun refresh() {
-        if (_state.value.isRefreshing) return
-        nextMaxTime = 0L
-        loadInternal(isRefresh = true)
-    }
+    override fun keyOf(item: UserThread): Any = item.tid
 }

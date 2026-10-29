@@ -31,12 +31,8 @@ import kotlinx.serialization.json.put
 
 private const val MY_BASE  = "https://my.hupu.com"
 private const val BBS_BASE = "https://bbs.hupu.com"
-private const val DESKTOP_UA =
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-
-// bbs.hupu.com 的 WAF 对 Mac UA 会返回 405；Windows Chrome UA + 浏览器导航头才能拿到 SSR
-private const val BBS_UA =
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+private const val DESKTOP_UA = HupuHttp.DESKTOP_UA
+private const val BBS_UA = HupuHttp.BBS_UA
 
 private val BBS_NEXT_DATA_REGEX = Regex(
     """<script id="__NEXT_DATA__" type="application/json">(.*?)</script>""",

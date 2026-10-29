@@ -41,12 +41,10 @@ private const val COMMENT_API = "https://games.mobileapi.hupu.com/1/8.0.99/bplco
 private const val BASE_WRITE_VERSION  = "8.0.99"
 private const val SCORE_WRITE_VERSION = "8.2.99"
 
-private const val MOBILE_UA =
-    "Mozilla/5.0 (Linux; Android 12; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36"
+private const val MOBILE_UA = HupuHttp.MOBILE_UA
 
 // www.hupu.com 见到移动端 UA 会 302 跳去 m.hupu.com（那边没有 cardDataList），必须用桌面 UA
-private const val DESKTOP_UA =
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+private const val DESKTOP_UA = HupuHttp.DESKTOP_UA
 
 /**
  * 赛程分区。businessId 是**按赛事**而非按运动划分的（`epl` 只含英超）。

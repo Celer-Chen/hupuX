@@ -23,13 +23,7 @@ private val NEXT_DATA_REGEX = Regex(
 class HupuScraper(private val client: HttpClient) {
 
     private suspend fun fetch(url: String): String =
-        client.get(url) {
-            header(
-                "User-Agent",
-                "Mozilla/5.0 (Linux; Android 12; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36"
-            )
-            header("Accept-Language", "zh-CN,zh;q=0.9")
-        }.bodyAsText()
+        HupuHttp.getString(client, url, ua = HupuHttp.MOBILE_UA)
 
     private fun parseNextData(html: String): JsonObject {
         val json = NEXT_DATA_REGEX.find(html)?.groupValues?.get(1)
@@ -291,9 +285,7 @@ class HupuScraper(private val client: HttpClient) {
     /** 获取指定评论的子回复列表 */
     suspend fun fetchSubReplies(tid: String, parentPid: String): List<Comment> {
         val url = "$BASE_URL/api/v2/reply/sub_list/$tid?pid=$parentPid&page=1&size=20"
-        val body = client.get(url) {
-            header("User-Agent", "Mozilla/5.0 (Linux; Android 12; Pixel 6) AppleWebKit/537.36")
-        }.bodyAsText()
+        val body = HupuHttp.getString(client, url, ua = HupuHttp.MOBILE_UA)
         val root = parseJsonObject(body)
         val list = root.obj("data")?.arr("list") ?: return emptyList()
         return list.map { parseComment(it.obj) }
