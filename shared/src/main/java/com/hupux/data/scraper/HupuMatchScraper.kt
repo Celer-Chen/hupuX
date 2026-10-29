@@ -173,8 +173,15 @@ class HupuMatchScraper(
         // 注意：评分字段（scoreAvg / scorePersonCount / commentCount）都在 node 里面，
         // 不在条目顶层——条目顶层只有 groupId / nodeId / node / subNodes 这些结构字段。
         val selfNode = data.obj("self")?.obj("node")
+        val selfInfo = selfNode?.obj("infoJson")
         val title  = selfNode?.str("name") ?: ""
         val raters = selfNode?.long_("summedScorePersonCount") ?: 0L
+        // 比赛日期与两队名，供技术统计页反查 PC 端 boxscoreId
+        val matchDate = selfInfo?.firstOf("matchTime")?.toLongOrNull()
+            ?.let { ts -> java.time.Instant.ofEpochMilli(ts).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString() }
+            ?: ""
+        val homeTeam = selfInfo?.firstOf("homeTeamName") ?: ""
+        val awayTeam = selfInfo?.firstOf("awayTeamName") ?: ""
 
         val list = data.obj("pageResult")?.arr("data") ?: EmptyJsonArray
         val items = list.mapNotNull { el ->
@@ -201,7 +208,10 @@ class HupuMatchScraper(
         return MatchScoreBoard(
             title     = title,
             raterText = if (raters > 0) "${formatCount(raters)}人参与评分" else "",
-            items     = items
+            items     = items,
+            matchDate = matchDate,
+            homeTeam  = homeTeam,
+            awayTeam  = awayTeam
         )
     }
 

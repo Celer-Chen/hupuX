@@ -14,12 +14,14 @@ import com.hupux.data.repository.MessageRepository
 import com.hupux.data.repository.PostRepository
 import com.hupux.data.repository.ProfileRepository
 import com.hupux.data.repository.SearchRepository
+import com.hupux.data.repository.StatsRepository
 import com.hupux.data.repository.ZoneRepository
 import com.hupux.data.UpdateChecker
 import com.hupux.data.scraper.HupuDesktopScraper
 import com.hupux.data.scraper.HupuMatchScraper
 import com.hupux.data.scraper.HupuImageUploader
 import com.hupux.data.scraper.HupuScraper
+import com.hupux.data.scraper.HupuStatsScraper
 import com.hupux.ui.home.HomeViewModel
 import com.hupux.ui.post.PostDetailViewModel
 import com.hupux.ui.profile.LoginWebViewViewModel
@@ -37,6 +39,8 @@ import com.hupux.ui.profile.UserThreadListViewModel
 import com.hupux.ui.topic.TopicDetailViewModel
 import com.hupux.ui.zone.ZoneDetailViewModel
 import com.hupux.ui.search.SearchHistory
+import com.hupux.ui.stats.BoxScoreViewModel
+import com.hupux.ui.stats.StandingsViewModel
 import com.hupux.ui.search.SearchViewModel
 import com.hupux.ui.zone.ZoneListViewModel
 import io.ktor.client.HttpClient
@@ -97,6 +101,8 @@ val appModule = module {
     single { FollowedZonesRepository(get<HupuDatabase>()) }
     single { PostRepository(get(), get(), get<CookiePreferences>(), get()) }
     single { SearchRepository(get()) }
+    single { HupuStatsScraper(get()) }
+    single { StatsRepository(get()) }
 
     // ── ViewModels ────────────────────────────────────────────────────────────
     viewModel { HomeViewModel(get(), get(), get(), get(), get()) }
@@ -117,4 +123,6 @@ val appModule = module {
     viewModel { ZoneListViewModel(get(), get()) }
     viewModel { TopicDetailViewModel(get()) }
     viewModel { SearchViewModel(get(), get()) }
+    viewModel { StandingsViewModel(get()) }
+    viewModel { BoxScoreViewModel(get()) }
 }

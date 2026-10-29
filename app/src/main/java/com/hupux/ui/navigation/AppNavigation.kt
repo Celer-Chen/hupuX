@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.navigation.navArgument
 import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.delay
@@ -44,6 +46,9 @@ import com.hupux.ui.score.ScoreDetailScreen
 import com.hupux.ui.score.ScoreItemScreen
 import com.hupux.ui.score.ScoreScreen
 import com.hupux.ui.search.SearchScreen
+import com.hupux.ui.stats.BoxScoreScreen
+import com.hupux.data.repository.StatsRepository
+import com.hupux.ui.stats.StandingsScreen
 import com.hupux.ui.settings.SettingsScreen
 import com.hupux.ui.theme.*
 import com.hupux.ui.topic.TopicDetailScreen
@@ -210,7 +215,24 @@ fun AppNavigation() {
                     onMatchClick = { bizType, bizNo ->
                         navController.navigate("score_detail/$bizType/$bizNo")
                     },
+                    onStandingsClick = { navController.navigate("standings") },
                     scrollToTopTrigger = scoreScrollTrigger
+                )
+            }
+            composable("standings") {
+                StandingsScreen(onBack = { navController.popBackStack() })
+            }
+            composable(
+                "box_score/{boxScoreId}/{league}",
+                arguments = listOf(
+                    navArgument("boxScoreId") { type = NavType.StringType },
+                    navArgument("league")     { type = NavType.StringType }
+                )
+            ) { entry ->
+                BoxScoreScreen(
+                    boxScoreId = entry.arguments?.getString("boxScoreId") ?: "",
+                    league     = entry.arguments?.getString("league") ?: "NBA",
+                    onBack     = { navController.popBackStack() }
                 )
             }
             composable(
@@ -220,11 +242,21 @@ fun AppNavigation() {
                     navArgument("bizNo")   { type = NavType.StringType }
                 )
             ) { entry ->
+                val scope = rememberCoroutineScope()
+                val statsRepo = org.koin.androidx.compose.getKoin().get<StatsRepository>()
                 ScoreDetailScreen(
                     bizType = entry.arguments?.getString("bizType") ?: "",
                     bizNo   = entry.arguments?.getString("bizNo") ?: "",
                     onItemClick = { t, n -> navController.navigate("score_item/$t/$n") },
-                    onBack  = { navController.popBackStack() }
+                    onBack  = { navController.popBackStack() },
+                    onOpenBoxScore = { date, home, away ->
+                        scope.launch {
+                            val id = runCatching { statsRepo.findBoxScoreId(date, home, away) }.getOrNull()
+                            if (id != null) {
+                                navController.navigate("box_score/$id/NBA")
+                            }
+                        }
+                    }
                 )
             }
             composable(

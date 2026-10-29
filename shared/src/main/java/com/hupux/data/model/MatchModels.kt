@@ -86,7 +86,11 @@ data class MatchScoreBoard(
     /** 如「马刺 95-105 尼克斯」 */
     val title: String,
     val raterText: String,
-    val items: List<ScoredItem>
+    val items: List<ScoredItem>,
+    /** 比赛日期（yyyy-MM-dd），用于反查技术统计 */
+    val matchDate: String = "",
+    val homeTeam: String = "",
+    val awayTeam: String = ""
 )
 
 /**
@@ -167,3 +171,94 @@ data class ScoreCommentPage(
     val cursor: Long,
     val hasMore: Boolean
 )
+
+// ─── 比赛技术统计（数据统计）──────────────────────────────────────────────
+
+/** 一名球员在某场比赛的技术统计 */
+data class PlayerBoxScore(
+    val name: String,
+    /** 场上位置 G/F/C；空串表示无 */
+    val position: String,
+    /** 出场时间（分钟） */
+    val minutes: String,
+    /** 投篮命中-出手，如 "11-19" */
+    val fieldGoals: String,
+    /** 三分命中-出手 */
+    val threePointers: String,
+    /** 罚球命中-出手 */
+    val freeThrows: String,
+    val offRebounds: String,
+    val defRebounds: String,
+    val rebounds: String,
+    val assists: String,
+    val fouls: String,
+    val steals: String,
+    val turnovers: String,
+    val blocks: String,
+    val points: String,
+    /** 正负值，如 "-6" / "+19" */
+    val plusMinus: String,
+    /** 是否首发（false = 替补） */
+    val starter: Boolean
+)
+
+/** 一方（主/客队）在某场比赛的技术统计 */
+data class TeamBoxScore(
+    val teamName: String,
+    /** 是否主队 */
+    val isHome: Boolean,
+    /** 分节比分，下标 0 = 第一节；总分为 [quarterScores] 之和 */
+    val quarterScores: List<String>,
+    /** 首发球员 */
+    val starters: List<PlayerBoxScore>,
+    /** 替补球员 */
+    val bench: List<PlayerBoxScore>
+) {
+    val totalScore: Int get() = quarterScores.mapNotNull { it.toIntOrNull() }.sum()
+}
+
+/** 一场比赛的完整技术统计（分节比分 + 两队球员数据） */
+data class MatchBoxScore(
+    /** 比赛标题，如「骑士 106-114 76人」 */
+    val title: String,
+    val home: TeamBoxScore,
+    val away: TeamBoxScore,
+    /** 数据是否可用（未开赛/数据缺失时为 false） */
+    val available: Boolean = true
+)
+
+// ─── 战绩排行（standings）──────────────────────────────────────────────
+
+/** 战绩排行表里的一行（一支球队） */
+data class StandingRow(
+    val rank: String,
+    val teamName: String,
+    val wins: String,
+    val losses: String,
+    val winPct: String,
+    val gamesBehind: String,
+    val homeRecord: String,
+    val awayRecord: String,
+    val divisionRecord: String,
+    val conferenceRecord: String,
+    val pointsFor: String,
+    val pointsAgainst: String,
+    val pointDiff: String,
+    /** 如「1连胜」「2连负」 */
+    val streak: String
+)
+
+/** 某个赛区/分区的战绩排行 */
+data class StandingGroup(
+    /** 如「东部」「西部」「东部A组」 */
+    val name: String,
+    val rows: List<StandingRow>
+)
+
+/** 联赛战绩排行（可含多个分区） */
+data class Standings(
+    /** 联赛名，如「NBA」 */
+    val league: String,
+    val groups: List<StandingGroup>
+)
+

@@ -32,6 +32,7 @@ fun ScoreDetailScreen(
     bizNo: String,
     onItemClick: (String, String) -> Unit,
     onBack: () -> Unit,
+    onOpenBoxScore: (matchDate: String, homeTeam: String, awayTeam: String) -> Unit = { _, _, _ -> },
     vm: ScoreDetailViewModel = koinViewModel()
 ) {
     val state by vm.state.collectAsState()

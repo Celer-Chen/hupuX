@@ -36,6 +36,7 @@ import java.util.Locale
 @Composable
 fun ScoreScreen(
     onMatchClick: (bizType: String, bizNo: String) -> Unit,
+    onStandingsClick: () -> Unit = {},
     scrollToTopTrigger: Int = 0,
     vm: ScoreViewModel = koinViewModel()
 ) {
@@ -72,10 +73,14 @@ fun ScoreScreen(
         // ── 顶栏 + 分区 Tab ───────────────────────────────────────
         Column(barModifier.statusBarsPadding()) {
             Row(
-                Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 20.dp),
+                Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("评分", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = onStandingsClick) {
+                    Text("排行", fontSize = 14.sp, color = HupuRed, fontWeight = FontWeight.Medium)
+                }
             }
             // 分区较多（12 个），Tab 行可横向滚动
             Row(
