@@ -1,147 +1,387 @@
 package com.hupux.ui.search
 
-import android.annotation.SuppressLint
-import android.graphics.Color as AndroidColor
-import android.webkit.WebResourceRequest
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
-import com.hupux.ui.theme.AppBg
-import com.hupux.ui.theme.HupuRed
-import com.hupux.ui.theme.HeaderBg
-import com.hupux.ui.theme.TextPrimary
-import com.hupux.ui.theme.DividerColor
-import com.hupux.ui.theme.isDarkTheme
+import coil3.compose.AsyncImage
+import com.hupux.data.model.SearchPost
+import com.hupux.ui.components.HupuPullToRefresh
+import com.hupux.ui.home.PillButton
+import com.hupux.ui.theme.*
+import org.koin.androidx.compose.koinViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
-private val POST_URL_REGEX = Regex("""m\.hupu\.com/bbs/(\d+)(?:\.html)?""")
-
-// 注入深色 CSS：黑底、文字变浅、所有元素背景透明（顺带消除结果页左侧白色竖条），
-// 关键词/标签 chip 单独设为灰底白字。用 [class*=] 前缀匹配，抗 CSS-module 哈希变化。
-// SPA 路由切换可能重建 DOM，用 MutationObserver 让样式自愈（丢了就重新插回）。
-private const val JS_ENABLE_DARK = """(function(){
-  var CSS =
-    'html,body{background:#000 !important}' +
-    'body *{background-color:transparent !important;border-color:#2a2d3a !important;box-shadow:none !important}' +
-    'body *:not(svg):not(use):not(path):not(img){color:#e4e8f2 !important}' +
-    '[class*="keyword"],[class*="tag"],[class*="hot-word"],[class*="history-item"]{background-color:#2a2d3a !important;border-radius:6px !important}' +
-    '[class*="keyword"] *,[class*="tag"] *,[class*="hot-word"] *,[class*="history-item"] *{color:#fff !important}' +
-    'input,textarea{background-color:#1a1a1a !important;color:#fff !important}' +
-    'a{color:#5b9bd5 !important}';
-  function apply(){
-    var el = document.getElementById('__hx_dark__');
-    if (!el) {
-      el = document.createElement('style'); el.id='__hx_dark__';
-      (document.head || document.documentElement).appendChild(el);
-    }
-    if (el.textContent !== CSS) el.textContent = CSS;
-  }
-  apply();
-  if (!window.__hx_obs__) {
-    window.__hx_obs__ = new MutationObserver(apply);
-    window.__hx_obs__.observe(document.documentElement, {childList:true, subtree:true});
-  }
-})();"""
-
-// 移除深色 CSS：先停掉自愈 observer，再移除样式
-private const val JS_DISABLE_DARK = """(function(){
-  if (window.__hx_obs__) { window.__hx_obs__.disconnect(); window.__hx_obs__ = null; }
-  var el = document.getElementById('__hx_dark__');
-  if (el) el.remove();
-})();"""
-
-@SuppressLint("SetJavaScriptEnabled")
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun SearchScreen(onPostClick: (String) -> Unit, onBack: () -> Unit) {
-    val onPostClickRef = rememberUpdatedState(onPostClick)
-    val isDark         = isDarkTheme
-    val isDarkRef      = rememberUpdatedState(isDark)
-    val bgColor        = AppBg
+fun SearchScreen(
+    onPostClick: (String) -> Unit,
+    onBack: () -> Unit,
+    vm: SearchViewModel = koinViewModel()
+) {
+    val state by vm.state.collectAsState()
+    val focusRequester = remember { FocusRequester() }
+    val keyboard       = LocalSoftwareKeyboardController.current
 
-    // 每次 isDark 变化时对已加载的页面实时注入/移除暗色样式
-    val webViewRef = remember { mutableStateOf<WebView?>(null) }
-    LaunchedEffect(isDark) {
-        webViewRef.value?.evaluateJavascript(
-            if (isDark) JS_ENABLE_DARK else JS_DISABLE_DARK, null
-        )
-    }
+    // 进页面自动聚焦输入框
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
-    Column(Modifier.fillMaxSize().background(bgColor)) {
-        // 顶栏（搜索已从底部 tab 改为首页/发现页入口，这里需要返回按钮）
-        Column(Modifier.fillMaxWidth().background(HeaderBg).statusBarsPadding()) {
-            Row(
-                Modifier.fillMaxWidth().height(52.dp).padding(start = 4.dp, end = 20.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "返回", tint = TextPrimary)
-                }
-                Text("搜索", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
+    Column(Modifier.fillMaxSize().background(AppBg)) {
+        // ── 搜索栏 ────────────────────────────────────────────────
+        Row(
+            Modifier.fillMaxWidth().background(HeaderBg).statusBarsPadding()
+                .padding(start = 4.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回", tint = TextPrimary)
             }
-            HorizontalDivider(thickness = 0.5.dp, color = DividerColor)
-        }
-
-        AndroidView(
-            factory = { ctx ->
-                WebView(ctx).apply {
-                    settings.javaScriptEnabled = true
-                    settings.domStorageEnabled  = true
-                    settings.userAgentString    =
-                        "Mozilla/5.0 (Linux; Android 12; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36"
-
-                    // WebView 自身背景跟随主题，避免加载期间白屏
-                    setBackgroundColor(AndroidColor.TRANSPARENT)
-
-                    webViewClient = object : WebViewClient() {
-                        override fun onPageFinished(view: WebView, url: String) {
-                            // 页面加载完成后注入暗色样式
-                            if (isDarkRef.value) {
-                                view.evaluateJavascript(JS_ENABLE_DARK, null)
-                            }
-                        }
-
-                        override fun shouldOverrideUrlLoading(
-                            view: WebView, request: WebResourceRequest
-                        ): Boolean {
-                            val tid = POST_URL_REGEX.find(request.url.toString())
-                                ?.groupValues?.get(1)
-                            if (tid != null) { onPostClickRef.value(tid); return true }
-                            return false
-                        }
-
-                        override fun onPageStarted(
-                            view: WebView, url: String, favicon: android.graphics.Bitmap?
-                        ) {
-                            val tid = POST_URL_REGEX.find(url)?.groupValues?.get(1)
-                            if (tid != null) {
-                                view.stopLoading()
-                                view.post { onPostClickRef.value(tid) }
-                            }
+            OutlinedTextField(
+                value         = state.query,
+                onValueChange = vm::updateQuery,
+                singleLine    = true,
+                placeholder   = { Text("搜索帖子", fontSize = 14.sp, color = TextTertiary) },
+                trailingIcon  = {
+                    if (state.query.isNotEmpty()) {
+                        IconButton(onClick = vm::clearQuery) {
+                            Icon(Icons.Default.Close, contentDescription = "清空", tint = TextTertiary)
                         }
                     }
-                    webViewRef.value = this
-                    loadUrl("https://m.hupu.com/search")
+                },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = {
+                    keyboard?.hide()
+                    vm.search()
+                }),
+                shape    = RoundedCornerShape(18.dp),
+                colors   = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor   = HupuRed,
+                    unfocusedBorderColor = DividerColor
+                ),
+                modifier = Modifier.weight(1f).focusRequester(focusRequester)
+            )
+            TextButton(onClick = { keyboard?.hide(); vm.search() }) {
+                Text("搜索", color = HupuRed, fontWeight = FontWeight.Bold)
+            }
+        }
+        HorizontalDivider(thickness = 0.5.dp, color = DividerColor)
+
+        Box(Modifier.fillMaxSize()) {
+            when {
+                state.submittedQuery.isEmpty() -> SearchLanding(
+                    state           = state,
+                    onSearch        = { q -> keyboard?.hide(); vm.search(q) },
+                    onClearHistory  = vm::clearHistory,
+                    onRemoveHistory = vm::removeHistory
+                )
+
+                state.isLoading -> CircularProgressIndicator(
+                    Modifier.align(Alignment.Center), color = HupuRed)
+
+                state.error != null && state.results.isEmpty() -> Column(
+                    Modifier.align(Alignment.Center),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(state.error!!, color = HupuRed, fontSize = 14.sp)
+                    Spacer(Modifier.height(12.dp))
+                    PillButton("重试", onClick = { vm.search() })
                 }
-            },
-            modifier = Modifier.fillMaxSize()
-        )
+
+                state.results.isEmpty() -> Column(
+                    Modifier.align(Alignment.Center),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("🔍", fontSize = 40.sp)
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "没有找到「${state.submittedQuery}」相关的帖子",
+                        color = TextSecondary, fontSize = 14.sp
+                    )
+                }
+
+                else -> SearchResults(
+                    state        = state,
+                    onPostClick  = onPostClick,
+                    onLoadMore   = vm::loadMore,
+                    onRefresh    = vm::refresh,
+                    onSelectSort = vm::selectSort
+                )
+            }
+        }
     }
 }
+
+// ─── 搜索首页：热搜词 + 搜索历史 ─────────────────────────────────────────────
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SearchLanding(
+    state: SearchUiState,
+    onSearch: (String) -> Unit,
+    onClearHistory: () -> Unit,
+    onRemoveHistory: (String) -> Unit
+) {
+    Column(Modifier.fillMaxSize()) {
+        if (state.hotWords.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "热搜",
+                fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+            )
+            FlowRow(
+                Modifier.padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                state.hotWords.forEach { word ->
+                    SuggestionChip(
+                        onClick = { onSearch(word) },
+                        label = { Text(word, fontSize = 13.sp) }
+                    )
+                }
+            }
+        }
+
+        if (state.history.isNotEmpty()) {
+            Spacer(Modifier.height(16.dp))
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("搜索历史", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = onClearHistory, contentPadding = PaddingValues(0.dp)) {
+                    Text("清空", fontSize = 12.sp, color = TextTertiary)
+                }
+            }
+            FlowRow(
+                Modifier.padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                state.history.forEach { query ->
+                    HistoryChip(
+                        query   = query,
+                        onClick = { onSearch(query) },
+                        onRemove = { onRemoveHistory(query) }
+                    )
+                }
+            }
+        }
+
+        if (state.hotWords.isEmpty() && state.history.isEmpty()) {
+            Box(Modifier.fillMaxWidth().padding(top = 80.dp), Alignment.Center) {
+                Text("输入关键词搜索帖子", color = TextTertiary, fontSize = 13.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun HistoryChip(query: String, onClick: () -> Unit, onRemove: () -> Unit) {
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(BgGray)
+            .clickable(onClick = onClick)
+            .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(query, fontSize = 13.sp, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        IconButton(onClick = onRemove, modifier = Modifier.size(20.dp)) {
+            Icon(Icons.Default.Close, contentDescription = "删除", tint = TextTertiary,
+                modifier = Modifier.size(12.dp))
+        }
+    }
+}
+
+// ─── 搜索结果 ────────────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SearchResults(
+    state: SearchUiState,
+    onPostClick: (String) -> Unit,
+    onLoadMore: () -> Unit,
+    onRefresh: () -> Unit,
+    onSelectSort: (SearchSort) -> Unit
+) {
+    val listState = rememberLazyListState()
+
+    val shouldLoadMore by remember {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull()?.index ?: 0
+            last >= info.totalItemsCount - 3 && state.hasMore && !state.isLoadingMore && !state.isRefreshing
+        }
+    }
+    LaunchedEffect(shouldLoadMore) { if (shouldLoadMore) onLoadMore() }
+
+    HupuPullToRefresh(
+        isRefreshing = state.isRefreshing,
+        onRefresh    = onRefresh,
+        modifier     = Modifier.fillMaxSize()
+    ) {
+        LazyColumn(state = listState) {
+            item {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "共 ${state.totalCount} 个结果",
+                        fontSize = 12.sp, color = TextTertiary, modifier = Modifier.weight(1f)
+                    )
+                    SearchSort.entries.forEach { sort ->
+                        TextButton(
+                            onClick = { onSelectSort(sort) },
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+                        ) {
+                            Text(
+                                sort.label,
+                                fontSize = 13.sp,
+                                fontWeight = if (state.sort == sort) FontWeight.Bold else FontWeight.Normal,
+                                color = if (state.sort == sort) HupuRed else TextTertiary
+                            )
+                        }
+                    }
+                }
+            }
+            items(state.displayedResults, key = { it.tid }) { post ->
+                SearchPostCard(post = post, keyword = state.submittedQuery, onClick = { onPostClick(post.tid) })
+            }
+            if (state.isLoadingMore) {
+                item {
+                    Box(Modifier.fillMaxWidth().padding(16.dp), Alignment.Center) {
+                        CircularProgressIndicator(Modifier.size(24.dp), color = HupuRed)
+                    }
+                }
+            }
+            if (!state.hasMore && state.results.isNotEmpty()) {
+                item {
+                    Box(Modifier.fillMaxWidth().padding(16.dp), Alignment.Center) {
+                        Text("没有更多了", fontSize = 12.sp, color = TextTertiary)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ─── 结果卡片 ────────────────────────────────────────────────────────────────
+
+@Composable
+private fun SearchPostCard(post: SearchPost, keyword: String, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 5.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp), color = CardBg, shadowElevation = 1.dp
+    ) {
+        Row(Modifier.padding(14.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    highlight(post.title, keyword),
+                    fontSize = 15.sp, fontWeight = FontWeight.Medium, color = TextPrimary,
+                    lineHeight = 21.sp, maxLines = 2, overflow = TextOverflow.Ellipsis
+                )
+                if (post.summary.isNotEmpty()) {
+                    Spacer(Modifier.height(5.dp))
+                    Text(
+                        highlight(post.summary, keyword),
+                        fontSize = 12.sp, color = TextSecondary,
+                        lineHeight = 18.sp, maxLines = 2, overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    buildString {
+                        append(post.username)
+                        append("  💬 ${post.replies}")
+                        if (post.lights > 0)       append("  👍 ${post.lights}")
+                        if (post.recommendNum > 0) append("  🔥 ${post.recommendNum}")
+                        if (post.lastPostTime > 0) append("  ${formatLastReply(post.lastPostTime)}")
+                    },
+                    fontSize = 11.sp, color = TextTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (post.image.isNotEmpty()) {
+                Spacer(Modifier.width(10.dp))
+                Box {
+                    AsyncImage(
+                        model              = post.image,
+                        contentDescription = null,
+                        contentScale       = ContentScale.Crop,
+                        modifier           = Modifier.size(84.dp).clip(RoundedCornerShape(8.dp)).background(BgGray)
+                    )
+                    if (post.isVideo) {
+                        Surface(
+                            color = Color.Black.copy(alpha = 0.55f),
+                            shape = RoundedCornerShape(4.dp),
+                            modifier = Modifier.align(Alignment.BottomStart).padding(4.dp)
+                        ) {
+                            Text("视频", fontSize = 9.sp, color = Color.White,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 关键词高亮（不区分大小写），无关键词时原样返回 */
+@Composable
+private fun highlight(text: String, keyword: String): AnnotatedString {
+    val key = keyword.trim()
+    if (key.isEmpty()) return AnnotatedString(text)
+    return buildAnnotatedString {
+        val lower = text.lowercase()
+        val lowerKey = key.lowercase()
+        var start = 0
+        while (true) {
+            val idx = lower.indexOf(lowerKey, start)
+            if (idx < 0) {
+                append(text.substring(start))
+                break
+            }
+            append(text.substring(start, idx))
+            withStyle(SpanStyle(color = HupuRed, fontWeight = FontWeight.Bold)) {
+                append(text.substring(idx, idx + key.length))
+            }
+            start = idx + key.length
+        }
+    }
+}
+
+private val LAST_REPLY_FMT = SimpleDateFormat("MM-dd HH:mm", Locale.CHINA)
+
+private fun formatLastReply(epochSeconds: Long): String =
+    LAST_REPLY_FMT.format(Date(epochSeconds * 1000))

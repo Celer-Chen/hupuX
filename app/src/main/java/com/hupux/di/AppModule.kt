@@ -12,6 +12,7 @@ import com.hupux.data.repository.HomeRepository
 import com.hupux.data.repository.MessageRepository
 import com.hupux.data.repository.PostRepository
 import com.hupux.data.repository.ProfileRepository
+import com.hupux.data.repository.SearchRepository
 import com.hupux.data.repository.ZoneRepository
 import com.hupux.data.UpdateChecker
 import com.hupux.data.scraper.HupuDesktopScraper
@@ -34,6 +35,8 @@ import com.hupux.ui.profile.UserReplyListViewModel
 import com.hupux.ui.profile.UserThreadListViewModel
 import com.hupux.ui.topic.TopicDetailViewModel
 import com.hupux.ui.zone.ZoneDetailViewModel
+import com.hupux.ui.search.SearchHistory
+import com.hupux.ui.search.SearchViewModel
 import com.hupux.ui.zone.ZoneListViewModel
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
@@ -75,6 +78,7 @@ val appModule = module {
     // ── Cookie ────────────────────────────────────────────────────────────────
     single<CookiePreferences> { CookiePreferences(androidContext()) }
     single<CookieStorage>     { get<CookiePreferences>() }
+    single { SearchHistory(androidContext()) }
 
     // ── Scrapers ──────────────────────────────────────────────────────────────
     single { HupuScraper(get()) }
@@ -90,6 +94,7 @@ val appModule = module {
     single { MessageRepository(get()) }
     single { FollowedZonesRepository(get<HupuDatabase>()) }
     single { PostRepository(get(), get(), get<CookiePreferences>(), get()) }
+    single { SearchRepository(get()) }
 
     // ── ViewModels ────────────────────────────────────────────────────────────
     viewModel { HomeViewModel(get(), get(), get(), get()) }
@@ -109,4 +114,5 @@ val appModule = module {
     viewModel { ZoneDetailViewModel(get(), get<CookiePreferences>()) }
     viewModel { ZoneListViewModel(get(), get()) }
     viewModel { TopicDetailViewModel(get()) }
+    viewModel { SearchViewModel(get(), get()) }
 }

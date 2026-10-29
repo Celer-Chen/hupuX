@@ -365,26 +365,58 @@ class HupuScraper(private val client: HttpClient) {
             )
         }
 
-    suspend fun fetchSearch(query: String): List<Post> {
+    /**
+     * 搜索帖子。走 /api/v2/search2（未登录可用，20 条/页）：
+     * `keyword={kw}&puid=0&type=posts&topicId=0&page={page}`
+     *
+     * 标题/摘要里带 `<font color=...>关键词</font>` 高亮标签，这里去掉标签留纯文本，
+     * 由界面用 AnnotatedString 自己高亮（与主题色一致）。
+     */
+    suspend fun fetchSearchPosts(query: String, page: Int = 1): SearchPage {
         val encoded = query.encodeURLQueryComponent()
-        val html = fetch("$BASE_URL/search?kw=$encoded")
-        return try {
-            val pp = parseNextData(html)
-            val arr = pp.arr("res") ?: return emptyList()
-            arr.mapNotNull { el ->
-                val o = el.obj
-                val tid = o.str("tid") ?: return@mapNotNull null
-                Post(
-                    tid     = tid,
-                    title   = o.str("title") ?: "",
-                    url     = o.str("url") ?: "$BASE_URL/bbs/$tid.html",
-                    label   = o.str("label") ?: "",
-                    replies = o.str("replies")?.toIntOrNull() ?: o.int_("replies") ?: 0,
-                    type    = o.str("type") ?: ""
-                )
-            }
-        } catch (_: Exception) { emptyList() }
+        val url = "$BASE_URL/api/v2/search2?keyword=$encoded&puid=0&type=posts&topicId=0&page=$page"
+        val root = parseJsonObject(fetch(url))
+        val result = root.obj("data")?.obj("result")
+            ?: return SearchPage(emptyList(), page, 0, false, 0)
+        val list = result.arr("data") ?: return SearchPage(emptyList(), page, 0, false, 0)
+        val totalPage = result.int_("totalPage") ?: 1
+        val posts = list.mapNotNull { el ->
+            val o = el.obj
+            val tid = o.long_("id")?.toString() ?: return@mapNotNull null
+            SearchPost(
+                tid          = tid,
+                title        = stripSearchHighlight(o.str("title") ?: ""),
+                summary      = stripSearchHighlight(o.str("content") ?: ""),
+                replies      = o.int_("replies") ?: 0,
+                lights       = o.int_("lights") ?: 0,
+                recommendNum = o.int_("recNum") ?: 0,
+                username     = o.str("username") ?: "",
+                image        = o.str("picture")?.takeIf { it.isNotEmpty() } ?: o.str("img") ?: "",
+                isVideo      = o.bool_("movie") ?: ((o.int_("isMovie") ?: 0) == 1),
+                lastPostTime = o.long_("lastPostTime") ?: 0L
+            )
+        }
+        return SearchPage(
+            posts     = posts,
+            currentPage = page,
+            totalPage = totalPage,
+            hasMore   = page < totalPage,
+            totalCount = result.int_("count") ?: 0
+        )
     }
+
+    /** 搜索页热搜词（/search SSR 的 hotInfo.list[].showName），拿不到就返回空 */
+    suspend fun fetchHotSearchWords(): List<String> = try {
+        val pp = parseNextData(fetch("$BASE_URL/search"))
+        pp.obj("hotInfo")?.arr("list")
+            ?.mapNotNull { el -> (el as? JsonObject)?.str("showName") }
+            ?.filter { it.isNotBlank() }
+            ?: emptyList()
+    } catch (_: Exception) { emptyList() }
+
+    /** 去掉搜索结果里的高亮标签，如 `<font color='...'>科比</font>` */
+    private fun stripSearchHighlight(html: String): String =
+        if ('<' in html) html.replace(Regex("<[^>]*>"), "") else html
 
     /**
      * 修复 JSON content 字段里的图片格式：

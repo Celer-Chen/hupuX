@@ -17,6 +17,33 @@ data class Post(
     val isVote: Boolean = false
 )
 
+/** 搜索结果里的一条帖子（字段来自 /api/v2/search2） */
+data class SearchPost(
+    val tid: String,
+    /** 已去掉高亮标签的纯文本标题 */
+    val title: String,
+    /** 摘要（可能为空） */
+    val summary: String,
+    val replies: Int,
+    val lights: Int,
+    val recommendNum: Int,
+    val username: String,
+    /** 列表缩略图；空串表示没有 */
+    val image: String,
+    val isVideo: Boolean,
+    /** 最后回复时间（秒级时间戳），用于「最新」排序 */
+    val lastPostTime: Long
+)
+
+/** 搜索结果分页（20 条/页） */
+data class SearchPage(
+    val posts: List<SearchPost>,
+    val currentPage: Int,
+    val totalPage: Int,
+    val hasMore: Boolean,
+    val totalCount: Int
+)
+
 data class ZoneCategory(
     val categoryId: Int,
     val name: String,
