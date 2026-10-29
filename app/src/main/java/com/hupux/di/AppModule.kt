@@ -5,6 +5,7 @@ import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.driver.android.AndroidSqliteDriver
 import com.hupux.data.CookieStorage
 import com.hupux.data.local.CookiePreferences
+import com.hupux.data.local.HomeMatchesCache
 import com.hupux.data.local.ResilientSqliteCallback
 import com.hupux.data.repository.FollowedZonesRepository
 import com.hupux.shared.db.HupuDatabase
@@ -79,6 +80,7 @@ val appModule = module {
     single<CookiePreferences> { CookiePreferences(androidContext()) }
     single<CookieStorage>     { get<CookiePreferences>() }
     single { SearchHistory(androidContext()) }
+    single { HomeMatchesCache(androidContext()) }
 
     // ── Scrapers ──────────────────────────────────────────────────────────────
     single { HupuScraper(get()) }
@@ -97,7 +99,7 @@ val appModule = module {
     single { SearchRepository(get()) }
 
     // ── ViewModels ────────────────────────────────────────────────────────────
-    viewModel { HomeViewModel(get(), get(), get(), get()) }
+    viewModel { HomeViewModel(get(), get(), get(), get(), get()) }
     viewModel { PostDetailViewModel(get(), get<CookiePreferences>()) }
     viewModel { LoginWebViewViewModel(get<CookiePreferences>()) }
     viewModel { MessageViewModel(get()) }

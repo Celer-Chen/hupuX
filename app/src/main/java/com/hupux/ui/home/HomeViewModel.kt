@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.hupux.data.model.HomeMatch
 import com.hupux.data.model.HotItem
 import com.hupux.data.model.Post
+import com.hupux.data.local.HomeMatchesCache
 import com.hupux.data.repository.FollowedZonesRepository
 import com.hupux.data.repository.HomeRepository
 import com.hupux.data.repository.ZoneRepository
@@ -31,6 +32,13 @@ private const val MATCH_REFRESH_INTERVAL_MS = 2 * 60 * 1000L
  */
 private const val FOLLOW_FETCH_CONCURRENCY = 3
 
+/**
+ * 关注流单次抓取的专区数量上限。用户关注几十个专区时，一进首页就全量抓既慢又容易
+ * 触发虎扑风控；这里按「最近关注优先」只取前 [FOLLOW_FETCH_MAX_ZONES] 个，
+ * 其余专区要刷到对应页签/专区详情才拉。
+ */
+private const val FOLLOW_FETCH_MAX_ZONES = 12
+
 data class HomeUiState(
     val recommendPosts:      List<Post>       = emptyList(),
     val bannerPosts:         List<Post>       = emptyList(),
@@ -55,7 +63,8 @@ class HomeViewModel constructor(
     private val homeRepo:     HomeRepository,
     private val zoneRepo:     ZoneRepository,
     private val followedRepo: FollowedZonesRepository,
-    private val matchScraper: HupuMatchScraper
+    private val matchScraper: HupuMatchScraper,
+    private val matchesCache: HomeMatchesCache
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(HomeUiState())
@@ -76,6 +85,13 @@ class HomeViewModel constructor(
 
     init {
         loadRecommend()
+        // 冷启动先展示上次缓存的比分，用户不用等 580KB 首页抓完才看到横条；
+        // 后台按节流间隔决定要不要真去抓一次。
+        val cached = matchesCache.load()
+        if (cached.isNotEmpty()) {
+            _homeMatches.value = cached
+            lastMatchFetch = matchesCache.savedAt
+        }
         refreshHomeMatches()
     }
 
@@ -92,8 +108,10 @@ class HomeViewModel constructor(
         matchJob = viewModelScope.launch {
             runCatching { matchScraper.fetchHomeMatches() }
                 .onSuccess {
+                    val now = System.currentTimeMillis()
                     _homeMatches.value = it
-                    lastMatchFetch = System.currentTimeMillis()
+                    lastMatchFetch = now
+                    if (it.isNotEmpty()) matchesCache.save(it, now)
                 }
         }
     }
@@ -177,7 +195,8 @@ class HomeViewModel constructor(
                 isLoadingFollow = !isRefresh,
                 isRefreshing    = isRefresh
             )
-            val zones = followedRepo.getAll().first()
+            // followedAt 倒序（数据库本来就是这个顺序），只取最近关注的若干个
+            val zones = followedRepo.getAll().first().take(FOLLOW_FETCH_MAX_ZONES)
             if (zones.isEmpty()) {
                 _state.value = _state.value.copy(
                     followedPool = emptyList(), followZoneCursors = emptyMap(),

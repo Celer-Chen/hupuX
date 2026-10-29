@@ -72,5 +72,6 @@ dependencies {
     implementation(libs.coil3.gif)
     implementation(libs.haze)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.serialization.json)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
