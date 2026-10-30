@@ -57,6 +57,7 @@ fun HomeScreen(
     onTopicClick: (Long, String) -> Unit = { _, _ -> },
     onSettingsClick: () -> Unit = {},
     onSearchClick: () -> Unit = {},
+    onMatchClick: (match: com.hupux.data.model.HomeMatch) -> Unit = {},
     scrollToTopTrigger: Int = 0,
     vm: HomeViewModel = koinViewModel()
 ) {
@@ -149,7 +150,7 @@ fun HomeScreen(
                     // 今日比分横条（在 hero 与 Tab 之间，随 header 一起上滑隐藏）
                     if (homeMatches.isNotEmpty()) {
                         Spacer(Modifier.height(10.dp))
-                        TodayScoreStrip(homeMatches)
+                        TodayScoreStrip(homeMatches, onMatchClick)
                     }
 
                     // Plastic tabs
@@ -587,23 +588,23 @@ fun PillButton(label: String, onClick: () -> Unit) {
 // 但没有 matchId，所以只展示、不可点。
 
 @Composable
-private fun TodayScoreStrip(matches: List<HomeMatch>) {
+private fun TodayScoreStrip(matches: List<HomeMatch>, onMatchClick: (HomeMatch) -> Unit = {}) {
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(matches.size) { i -> ScoreChip(matches[i]) }
+        items(matches.size) { i -> ScoreChip(matches[i], onClick = { onMatchClick(matches[i]) }) }
     }
 }
 
 @Composable
-private fun ScoreChip(match: HomeMatch) {
+private fun ScoreChip(match: HomeMatch, onClick: () -> Unit = {}) {
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = CardBg,
         shadowElevation = 1.dp,
-        modifier = Modifier.width(150.dp)
+        modifier = Modifier.width(150.dp).clickable(onClick = onClick)
     ) {
         Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

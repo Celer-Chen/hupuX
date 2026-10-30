@@ -37,6 +37,7 @@ import java.util.Locale
 fun ScoreScreen(
     onMatchClick: (bizType: String, bizNo: String) -> Unit,
     onStandingsClick: () -> Unit = {},
+    onBoxScoreClick: (date: String, homeTeam: String, awayTeam: String) -> Unit = { _, _, _ -> },
     scrollToTopTrigger: Int = 0,
     vm: ScoreViewModel = koinViewModel()
 ) {
@@ -164,9 +165,18 @@ fun ScoreScreen(
                             count = day.matches.size,
                             key   = { i -> "m-${day.date}-${day.matches[i].matchId}" }
                         ) { i ->
-                            MatchCard(day.matches[i]) { m ->
-                                onMatchClick(m.scoreBizType, m.scoreBizNo)
-                            }
+                            MatchCard(
+                                day.matches[i],
+                                onClick     = { m -> onMatchClick(m.scoreBizType, m.scoreBizNo) },
+                                onBoxScore  = { m ->
+                                    val date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                                        .format(java.util.Date(m.startTimeMillis))
+                                    val home = m.sides.getOrNull(0)?.name ?: ""
+                                    val away = m.sides.getOrNull(1)?.name ?: ""
+                                    if (home.isNotEmpty() && away.isNotEmpty())
+                                        onBoxScoreClick(date, home, away)
+                                }
+                            )
                         }
                     }
                     }
@@ -179,7 +189,7 @@ fun ScoreScreen(
 private val TIME_FMT = SimpleDateFormat("HH:mm", Locale.CHINA)
 
 @Composable
-private fun MatchCard(match: MatchItem, onClick: (MatchItem) -> Unit) {
+private fun MatchCard(match: MatchItem, onClick: (MatchItem) -> Unit, onBoxScore: ((MatchItem) -> Unit)? = null) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -245,6 +255,22 @@ private fun MatchCard(match: MatchItem, onClick: (MatchItem) -> Unit) {
             }
 
             // 评分摘要
+            // 已结束比赛显示「数据统计」入口
+            if (match.isFinished && onBoxScore != null) {
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(
+                        onClick = { onBoxScore(match) },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                    ) {
+                        Text("数据统计", fontSize = 12.sp, color = HupuRed, fontWeight = FontWeight.Medium)
+                    }
+                }
+            }
+
             if (match.hasScore && match.topScoreName.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))
                 HorizontalDivider(color = DividerColor)

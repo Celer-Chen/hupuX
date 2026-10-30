@@ -193,6 +193,8 @@ fun AppNavigation() {
                 .then(if (showBottomBar) Modifier.hazeSource() else Modifier)
         ) {
             composable("home") {
+                val homeScope = rememberCoroutineScope()
+                val homeStatsRepo = org.koin.androidx.compose.getKoin().get<StatsRepository>()
                 HomeScreen(
                     onPostClick        = { tid -> navController.navigate("post/$tid") },
                     onTopicClick       = { tagId, name ->
@@ -200,6 +202,16 @@ fun AppNavigation() {
                     },
                     onSettingsClick    = { navController.navigate("settings") },
                     onSearchClick      = { navController.navigate("search") },
+                    onMatchClick       = { match ->
+                        // 首页比分横条点击 → 按日期+队名反查 boxscoreId → 技术统计
+                        homeScope.launch {
+                            val date = match.date
+                            val id = runCatching {
+                                homeStatsRepo.findBoxScoreId(date, match.homeName, match.awayName)
+                            }.getOrNull()
+                            if (id != null) navController.navigate("box_score/$id/NBA")
+                        }
+                    },
                     scrollToTopTrigger = homeScrollTrigger
                 )
             }
@@ -211,11 +223,21 @@ fun AppNavigation() {
                 )
             }
             composable("score") {
+                val scoreScope = rememberCoroutineScope()
+                val scoreStatsRepo = org.koin.androidx.compose.getKoin().get<StatsRepository>()
                 ScoreScreen(
                     onMatchClick = { bizType, bizNo ->
                         navController.navigate("score_detail/$bizType/$bizNo")
                     },
                     onStandingsClick = { navController.navigate("standings") },
+                    onBoxScoreClick = { date, home, away ->
+                        scoreScope.launch {
+                            val id = runCatching {
+                                scoreStatsRepo.findBoxScoreId(date, home, away)
+                            }.getOrNull()
+                            if (id != null) navController.navigate("box_score/$id/NBA")
+                        }
+                    },
                     scrollToTopTrigger = scoreScrollTrigger
                 )
             }

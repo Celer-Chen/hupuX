@@ -224,7 +224,6 @@ private fun ProfileContent(
             ProfileMenuRow(
                 icon  = Icons.Outlined.Notifications,
                 label = "消息",
-                badge = unreadMessageCount,
                 onClick = onMessagesClick
             )
         }
