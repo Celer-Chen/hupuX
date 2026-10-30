@@ -353,6 +353,8 @@ private fun PostContent(
             }
         }
         val displayedComments = s.displayedComments
+        // 楼层号：分页模式按「(页码-1)*20 + 页内序号」，连续模式按全局序号
+        val floorOffset = if (s.pageMode) (s.commentPage - 1) * 20 else 0
         itemsIndexed(displayedComments, key = { _, c -> c.pid }) { index, comment ->
             // 连续模式：靠近底部时自动加载下一页；分页模式不自动叠加
             if (!s.pageMode && s.sortMode == CommentSort.DEFAULT &&
@@ -362,6 +364,7 @@ private fun PostContent(
             }
             CommentCard(
                 comment          = comment,
+                floor            = floorOffset + index + 1,
                 isLiked          = comment.pid in s.likedPids,
                 onLike           = if (s.post.fid.isNotEmpty()) {{
                     if (s.isLoggedIn) vm.toggleLike(comment) else onRequireLogin()
@@ -637,6 +640,7 @@ fun CommentCard(
     comment: Comment,
     isLiked: Boolean = false,
     showQuote: Boolean = true,
+    floor: Int? = null,
     onLike: (() -> Unit)? = null,
     onReplyClick: (() -> Unit)? = null,
     onReplyToComment: (() -> Unit)? = null,
