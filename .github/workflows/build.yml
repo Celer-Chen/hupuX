@@ -125,6 +125,12 @@ jobs:
       - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@v3
 
+      - name: Unit tests
+        run: ./gradlew :shared:testDebugUnitTest :app:testDebugUnitTest
+
+      - name: Lint check
+        run: ./gradlew :app:lintDebug
+
       - name: Build release APK
         run: >-
           ./gradlew :app:assembleRelease

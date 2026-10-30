@@ -32,6 +32,7 @@ dependencies {
     implementation(libs.kotlinx.datetime)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.sqldelight.coroutines.extensions)
+    testImplementation(libs.junit)
 }
 
 sqldelight {
