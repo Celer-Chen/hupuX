@@ -36,6 +36,7 @@ fun ScoreItemScreen(
     bizType: String,
     bizNo: String,
     onBack: () -> Unit,
+    onLoginClick: () -> Unit = {},
     vm: ScoreItemViewModel = koinViewModel()
 ) {
     val state by vm.state.collectAsState()
@@ -149,6 +150,23 @@ fun ScoreItemScreen(
             onDismiss = { showRating = false },
             onPick    = { stars -> vm.submitScore(stars); showRating = false },
             onCancelScore = { vm.cancelScore(); showRating = false }
+        )
+    }
+
+    if (state.showLoginPrompt) {
+        AlertDialog(
+            onDismissRequest = vm::consumeLoginPrompt,
+            title = { Text("需要登录") },
+            text  = { Text("打分、评论、点亮等功能需要登录虎扑账号后使用。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.consumeLoginPrompt()
+                    onLoginClick()
+                }) { Text("去登录", color = HupuRed, fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = vm::consumeLoginPrompt) { Text("取消") }
+            }
         )
     }
     }

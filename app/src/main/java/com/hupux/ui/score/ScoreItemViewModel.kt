@@ -35,7 +35,9 @@ data class ScoreItemUiState(
     /** 正在展开/加载子回复的父评论 id 集合 */
     val loadingSubs: Set<String> = emptySet(),
     /** 已展开的父评论 id 集合（用于控制「收起」） */
-    val expandedParents: Set<String> = emptySet()
+    val expandedParents: Set<String> = emptySet(),
+    /** 未登录时点击互动触发，UI 展示登录引导对话框 */
+    val showLoginPrompt: Boolean = false
 )
 
 class ScoreItemViewModel(
@@ -202,9 +204,12 @@ class ScoreItemViewModel(
 
     private fun requireLogin(): Boolean {
         if (cookiePrefs.isLoggedIn) return true
-        _state.update { it.copy(toast = "请先在「我的」页登录") }
+        _state.update { it.copy(showLoginPrompt = true) }
         return false
     }
+
+    /** 消费登录引导（对话框关闭时调用） */
+    fun consumeLoginPrompt() = _state.update { it.copy(showLoginPrompt = false) }
 
     private fun updateComment(id: String, transform: (ScoreComment) -> ScoreComment) {
         _state.update { s ->

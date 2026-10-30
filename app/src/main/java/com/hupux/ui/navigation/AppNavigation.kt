@@ -269,7 +269,8 @@ fun AppNavigation() {
                 ScoreItemScreen(
                     bizType = entry.arguments?.getString("bizType") ?: "",
                     bizNo   = entry.arguments?.getString("bizNo") ?: "",
-                    onBack  = { navController.popBackStack() }
+                    onBack  = { navController.popBackStack() },
+                    onLoginClick = { navController.navigate("login_webview") }
                 )
             }
             composable("search") {

@@ -110,10 +110,12 @@ fun PostDetailScreen(
     tid: String,
     onBack: () -> Unit,
     onOpenUser: (puid: String) -> Unit = {},
+    onLoginClick: () -> Unit = {},
     vm: PostDetailViewModel = koinViewModel()
 ) {
     LaunchedEffect(tid) { vm.load(tid) }
     val state by vm.state.collectAsState()
+    var showLoginDialog by remember { mutableStateOf(false) }
     val s = state as? PostDetailUiState.Success
 
     var viewerUrl by remember { mutableStateOf<String?>(null) }
@@ -174,7 +176,7 @@ fun PostDetailScreen(
                     Spacer(Modifier.height(12.dp))
                     PillButton("重试", onClick = { vm.load(tid) })
                 }
-                is PostDetailUiState.Success -> PostContent(st, vm, onOpenUser, topPadding)
+                is PostDetailUiState.Success -> PostContent(st, vm, onOpenUser, { showLoginDialog = true }, topPadding)
             }
         }
     }
@@ -198,11 +200,17 @@ fun PostDetailScreen(
                 isLoading        = success.isLoadingSubReplies,
                 canGoBack        = success.replyStack.size > 1,
                 likedPids        = success.likedPids,
-                onLike           = if (success.isLoggedIn && success.post.fid.isNotEmpty()) vm::toggleLike else null,
+                onLike           = if (success.post.fid.isNotEmpty()) {{
+                    if (success.isLoggedIn) vm::toggleLike else { c: Comment -> showLoginDialog = true }
+                }} else null,
                 onBack           = vm::popReplies,
                 onReplyClick     = vm::showReplies,
-                onReplyToComment = if (success.isLoggedIn) vm::startReply else null,
-                onOpenUser       = if (success.isLoggedIn) onOpenUser else { _: String -> }
+                onReplyToComment = { c: Comment ->
+                    if (success.isLoggedIn) vm.startReply(c) else showLoginDialog = true
+                },
+                onOpenUser       = { puid: String ->
+                    if (success.isLoggedIn) onOpenUser(puid) else showLoginDialog = true
+                }
             )
         }
     }
@@ -236,6 +244,24 @@ fun PostDetailScreen(
     viewerUrl?.let { url ->
         ImageViewerDialog(url = url, onDismiss = { viewerUrl = null })
     }
+
+    // ── 登录引导对话框 ────────────────────────────────────────────
+    if (showLoginDialog) {
+        AlertDialog(
+            onDismissRequest = { showLoginDialog = false },
+            title = { Text("需要登录") },
+            text  = { Text("点赞、回复、收藏、推荐等功能需要登录虎扑账号后使用。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showLoginDialog = false
+                    onLoginClick()
+                }) { Text("去登录", color = HupuRed, fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLoginDialog = false }) { Text("取消") }
+            }
+        )
+    }
 }
 
 // ─── Post content list ────────────────────────────────────────────────────────
@@ -245,6 +271,7 @@ private fun PostContent(
     s: PostDetailUiState.Success,
     vm: PostDetailViewModel,
     onOpenUser: (puid: String) -> Unit = {},
+    onRequireLogin: () -> Unit = {},
     /** 顶栏浮在内容之上，顶部留白按量到的栏高补 */
     contentTopPadding: Dp = 0.dp
 ) {
@@ -274,9 +301,15 @@ private fun PostContent(
             post          = s.post,
             isRecommended = s.isRecommended,
             isCollected   = s.isCollected,
-            onCollect     = if (s.isLoggedIn && s.post.fid.isNotEmpty()) vm::toggleCollect else null,
-            onRecommend   = if (s.isLoggedIn && s.post.fid.isNotEmpty()) vm::recommendPost else null,
-            onReplyMain   = if (s.isLoggedIn && s.post.fid.isNotEmpty()) vm::startMainPostReply else null
+            onCollect     = if (s.post.fid.isNotEmpty()) {{
+                if (s.isLoggedIn) vm.toggleCollect() else onRequireLogin()
+            }} else null,
+            onRecommend   = if (s.post.fid.isNotEmpty()) {{
+                if (s.isLoggedIn) vm.recommendPost() else onRequireLogin()
+            }} else null,
+            onReplyMain   = if (s.post.fid.isNotEmpty()) {{
+                if (s.isLoggedIn) vm.startMainPostReply() else onRequireLogin()
+            }} else null
         ) }
         item {
             Spacer(Modifier.height(8.dp))
@@ -330,14 +363,16 @@ private fun PostContent(
             CommentCard(
                 comment          = comment,
                 isLiked          = comment.pid in s.likedPids,
-                onLike           = if (s.isLoggedIn && s.post.fid.isNotEmpty()) {{ vm.toggleLike(comment) }} else null,
+                onLike           = if (s.post.fid.isNotEmpty()) {{
+                    if (s.isLoggedIn) vm.toggleLike(comment) else onRequireLogin()
+                }} else null,
                 onReplyClick     = { vm.showReplies(comment.pid) },
-                onReplyToComment = if (s.isLoggedIn && comment.desktopPage > 0) {
-                    { vm.startReply(comment) }
-                } else null,
-                onUserClick      = if (s.isLoggedIn && comment.authorPuid.isNotEmpty() && comment.desktopPage > 0) {
-                    { onOpenUser(comment.authorPuid) }
-                } else null   // 仅登录后开放用户主页与回复
+                onReplyToComment = if (comment.desktopPage > 0) {{
+                    if (s.isLoggedIn) vm.startReply(comment) else onRequireLogin()
+                }} else null,
+                onUserClick      = if (comment.authorPuid.isNotEmpty() && comment.desktopPage > 0) {{
+                    if (s.isLoggedIn) onOpenUser(comment.authorPuid) else onRequireLogin()
+                }} else null
             )
         }
         // 非默认排序：数据已全部在内存，「加载更多」只是本地增量显示，无需网络
